@@ -24,6 +24,8 @@ def test_frontend_is_served() -> None:
     )
     assert "onafhankelijke Nederlandstalige variant" in page.text
     assert 'href="https://poople.io/"' in page.text
+    assert "OpenTaal-woordenlijst" in page.text
+    assert 'href="https://github.com/OpenTaal/opentaal-wordlist"' in page.text
     assert stylesheet.status_code == 200
     assert script.status_code == 200
     assert 'requestGame("game")' in script.text

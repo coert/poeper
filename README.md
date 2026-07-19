@@ -1,5 +1,14 @@
 ## Daily word-ladder API
 
+Clone this repository together with the OpenTaal word-list submodule:
+
+```bash
+git clone --recurse-submodules <repository-url>
+```
+
+For an existing clone, initialize the word list once with
+`git submodule update --init --recursive`.
+
 Start the development server from the project root:
 
 ```bash

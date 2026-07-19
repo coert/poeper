@@ -19,4 +19,3 @@ services:
       - "127.0.0.1:18000:8000"
     volumes:
       - ./data:/app/data
-      - ../opentaal-wordlist/wordlist.txt:/app/assets/wordlist.txt:ro
