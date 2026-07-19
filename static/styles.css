@@ -389,6 +389,7 @@ button:focus-visible {
 }
 
 .share-button,
+.statistics-button,
 .share-copy-button {
   min-height: 46px;
   padding: 0 20px;
@@ -402,8 +403,39 @@ button:focus-visible {
   letter-spacing: .06em;
 }
 
-.share-button {
+.result-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
   margin-top: 8px;
+}
+
+.result-actions button {
+  min-width: 0;
+  flex: 1 1 0;
+  padding-inline: 10px;
+}
+
+.next-word-countdown {
+  margin: 17px 0 0;
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.next-word-countdown span,
+.next-word-countdown strong {
+  display: block;
+}
+
+.next-word-countdown strong {
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .12em;
 }
 
 .share-preview {
@@ -434,6 +466,83 @@ button:focus-visible {
   font-size: .78rem;
   font-weight: 750;
   text-align: center;
+}
+
+.statistics-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 22px 0;
+  border-block: 1px solid var(--line);
+}
+
+.statistics-summary div {
+  padding: 15px;
+  text-align: center;
+}
+
+.statistics-summary div + div {
+  border-left: 1px solid var(--line);
+}
+
+.statistics-summary strong,
+.statistics-summary span {
+  display: block;
+}
+
+.statistics-summary strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2rem;
+}
+
+.statistics-summary span {
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.histogram-title {
+  margin: 0 0 14px;
+  font-size: .78rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.histogram {
+  display: grid;
+  gap: 8px;
+}
+
+.histogram-row {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 9px;
+}
+
+.histogram-label {
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.histogram-track {
+  min-width: 0;
+  background: var(--paper-deep);
+}
+
+.histogram-bar {
+  min-width: 28px;
+  padding: 6px 8px;
+  background: var(--success);
+  color: #fff;
+  font-size: .74rem;
+  font-weight: 850;
+  line-height: 1;
+  text-align: right;
+  transition: width 180ms ease-out;
 }
 
 .clipboard-fallback {
@@ -527,6 +636,7 @@ dialog ol {
   .key {
     height: 46px;
   }
+
 }
 
 @media (prefers-reduced-motion: reduce) {

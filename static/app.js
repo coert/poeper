@@ -22,10 +22,21 @@ const elements = {
   sharePreview: document.querySelector("#share-preview"),
   shareCopyButton: document.querySelector("#share-copy-button"),
   copyStatus: document.querySelector("#copy-status"),
+  statisticsButton: document.querySelector("#statistics-button"),
+  statisticsDialog: document.querySelector("#statistics-dialog"),
+  statisticsClose: document.querySelector("#statistics-close"),
+  statisticsPlayed: document.querySelector("#statistics-played"),
+  statisticsAverage: document.querySelector("#statistics-average"),
+  statisticsAbovePar: document.querySelector("#statistics-above-par"),
+  statisticsHistogram: document.querySelector("#statistics-histogram"),
+  countdownTimer: document.querySelector("#countdown-timer"),
   helpButton: document.querySelector("#help-button"),
   helpDialog: document.querySelector("#help-dialog"),
   helpClose: document.querySelector("#help-close"),
 };
+
+const statisticsCookieName = "poeper_results";
+const statisticsCookieMaxAge = 60 * 60 * 24 * 400;
 
 const keyboardRows = [
   [..."QWERTYUIOP"],
@@ -33,6 +44,157 @@ const keyboardRows = [
   ["ENTER", ..."ZXCVBNM", "BACKSPACE"],
 ];
 let gameState = null;
+let nextWordAt = getNextMidnight();
+
+function readStatistics() {
+  const cookie = document.cookie
+    .split("; ")
+    .find((item) => item.startsWith(`${statisticsCookieName}=`));
+  if (!cookie) {
+    return {
+      lastDate: null,
+      lastParDate: null,
+      distribution: {},
+      aboveParTotal: 0,
+      aboveParGames: 0,
+    };
+  }
+
+  try {
+    const stored = JSON.parse(decodeURIComponent(cookie.slice(cookie.indexOf("=") + 1)));
+    if (!stored || typeof stored.distribution !== "object") throw new Error("Invalid statistics");
+    const distribution = {};
+    Object.entries(stored.distribution).forEach(([attempts, count]) => {
+      if (/^[1-9]\d*$/.test(attempts) && Number.isInteger(count) && count > 0) {
+        distribution[attempts] = count;
+      }
+    });
+    return {
+      lastDate: typeof stored.lastDate === "string" ? stored.lastDate : null,
+      lastParDate: typeof stored.lastParDate === "string" ? stored.lastParDate : null,
+      distribution,
+      aboveParTotal: Number.isInteger(stored.aboveParTotal) && stored.aboveParTotal >= 0
+        ? stored.aboveParTotal
+        : 0,
+      aboveParGames: Number.isInteger(stored.aboveParGames) && stored.aboveParGames >= 0
+        ? stored.aboveParGames
+        : 0,
+    };
+  } catch (error) {
+    return {
+      lastDate: null,
+      lastParDate: null,
+      distribution: {},
+      aboveParTotal: 0,
+      aboveParGames: 0,
+    };
+  }
+}
+
+function writeStatistics(statistics) {
+  const secure = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${statisticsCookieName}=${encodeURIComponent(JSON.stringify(statistics))}`
+    + `; Max-Age=${statisticsCookieMaxAge}; Path=/; SameSite=Lax${secure}`;
+}
+
+function recordCompletedGame(state) {
+  if (!state.completed) return;
+  const statistics = readStatistics();
+  let changed = false;
+
+  if (statistics.lastDate !== state.date) {
+    const attempts = String(state.attempts);
+    statistics.distribution[attempts] = (statistics.distribution[attempts] || 0) + 1;
+    statistics.lastDate = state.date;
+    changed = true;
+  }
+  if (statistics.lastParDate !== state.date) {
+    statistics.aboveParTotal += state.attempts - state.minimum_attempts;
+    statistics.aboveParGames += 1;
+    statistics.lastParDate = state.date;
+    changed = true;
+  }
+  if (changed) writeStatistics(statistics);
+}
+
+function renderStatistics() {
+  const statistics = readStatistics();
+  const entries = Object.entries(statistics.distribution)
+    .map(([attempts, count]) => [Number(attempts), count])
+    .sort((first, second) => first[0] - second[0]);
+  const gamesPlayed = entries.reduce((total, [, count]) => total + count, 0);
+  const attemptsTotal = entries.reduce(
+    (total, [attempts, count]) => total + attempts * count,
+    0,
+  );
+  const largestCount = Math.max(1, ...entries.map(([, count]) => count));
+
+  elements.statisticsPlayed.textContent = gamesPlayed;
+  elements.statisticsAverage.textContent = gamesPlayed
+    ? (attemptsTotal / gamesPlayed).toLocaleString("nl-NL", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })
+    : "0";
+  elements.statisticsAbovePar.textContent = statistics.aboveParGames
+    ? `+${(statistics.aboveParTotal / statistics.aboveParGames).toLocaleString("nl-NL", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })}`
+    : "—";
+  elements.statisticsHistogram.replaceChildren();
+
+  entries.forEach(([attempts, count]) => {
+    const row = document.createElement("div");
+    row.className = "histogram-row";
+    const label = document.createElement("span");
+    label.className = "histogram-label";
+    label.textContent = attempts;
+    label.setAttribute("aria-label", `${attempts} ${attempts === 1 ? "zet" : "zetten"}`);
+    const track = document.createElement("div");
+    track.className = "histogram-track";
+    const bar = document.createElement("div");
+    bar.className = "histogram-bar";
+    bar.style.width = `${(count / largestCount) * 100}%`;
+    bar.textContent = count;
+    track.append(bar);
+    row.append(label, track);
+    elements.statisticsHistogram.append(row);
+  });
+}
+
+function openStatisticsDialog() {
+  renderStatistics();
+  elements.statisticsDialog.showModal();
+}
+
+function getNextMidnight() {
+  const midnight = new Date();
+  midnight.setHours(24, 0, 0, 0);
+  return midnight;
+}
+
+function updateCountdown() {
+  const remaining = nextWordAt.getTime() - Date.now();
+  if (remaining <= 0) {
+    nextWordAt = getNextMidnight();
+    loadGame();
+    return;
+  }
+
+  const totalSeconds = Math.ceil(remaining / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const value = [hours, minutes, seconds]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
+  elements.countdownTimer.textContent = value;
+  elements.countdownTimer.setAttribute(
+    "aria-label",
+    `${hours} uur, ${minutes} minuten en ${seconds} seconden tot het volgende woord`,
+  );
+}
 
 function createShareText(state) {
   let previousWord = state.start_word;
@@ -119,6 +281,7 @@ function renderState(state) {
   elements.result.hidden = !state.completed;
 
   if (state.completed) {
+    recordCompletedGame(state);
     const extra = state.attempts - state.minimum_attempts;
     elements.resultTitle.textContent = extra > 2
       ? "Je hebt ’m eruit geperst."
@@ -341,12 +504,19 @@ elements.helpClose.addEventListener("click", () => elements.helpDialog.close());
 elements.shareButton.addEventListener("click", openShareDialog);
 elements.shareClose.addEventListener("click", () => elements.shareDialog.close());
 elements.shareCopyButton.addEventListener("click", copyShareResult);
+elements.statisticsButton.addEventListener("click", openStatisticsDialog);
+elements.statisticsClose.addEventListener("click", () => elements.statisticsDialog.close());
 elements.helpDialog.addEventListener("click", (event) => {
   if (event.target === elements.helpDialog) elements.helpDialog.close();
 });
 elements.shareDialog.addEventListener("click", (event) => {
   if (event.target === elements.shareDialog) elements.shareDialog.close();
 });
+elements.statisticsDialog.addEventListener("click", (event) => {
+  if (event.target === elements.statisticsDialog) elements.statisticsDialog.close();
+});
 
 buildKeyboard();
+updateCountdown();
+window.setInterval(updateCountdown, 1000);
 loadGame();

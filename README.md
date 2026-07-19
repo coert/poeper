@@ -20,6 +20,10 @@ HTTP-only cookie:
 GET /game
 ```
 
+Completed daily results are also stored as an aggregated tries distribution
+in the browser cookie `poeper_results`. This powers the statistics histogram
+without storing identifying information.
+
 Submit the next word:
 
 ```http

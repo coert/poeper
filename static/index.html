@@ -73,7 +73,14 @@
           <div><strong id="result-minimum">0</strong><span>kortste route</span></div>
         </div>
         <p id="result-copy"></p>
-        <button class="share-button" id="share-button" type="button">Resultaat delen</button>
+        <div class="result-actions">
+          <button class="share-button" id="share-button" type="button">Resultaat delen</button>
+          <button class="statistics-button" id="statistics-button" type="button">Statistieken</button>
+        </div>
+        <p class="next-word-countdown">
+          <span>Nieuw woord over</span>
+          <strong id="countdown-timer" role="timer">--:--:--</strong>
+        </p>
       </section>
     </section>
   </main>
@@ -107,6 +114,19 @@
     <pre class="share-preview" id="share-preview"></pre>
     <button class="share-copy-button" id="share-copy-button" type="button">Kopieer overzicht</button>
     <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+  </dialog>
+
+  <dialog id="statistics-dialog" aria-labelledby="statistics-title">
+    <button class="dialog-close" id="statistics-close" type="button" aria-label="Sluiten">×</button>
+    <p class="eyebrow">Jouw resultaten</p>
+    <h2 id="statistics-title">Statistieken</h2>
+    <div class="statistics-summary">
+      <div><strong id="statistics-played">0</strong><span>gespeeld</span></div>
+      <div><strong id="statistics-average">0</strong><span>gemiddeld</span></div>
+      <div><strong id="statistics-above-par">0</strong><span>gem. boven par</span></div>
+    </div>
+    <h3 class="histogram-title">Verdeling van zetten</h3>
+    <div class="histogram" id="statistics-histogram"></div>
   </dialog>
 </body>
 </html>

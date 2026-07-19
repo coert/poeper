@@ -35,7 +35,17 @@ def test_frontend_is_served() -> None:
     assert 'id="share-dialog"' in page.text
     assert 'id="share-preview"' in page.text
     assert 'id="share-copy-button"' in page.text
+    assert 'id="statistics-button"' in page.text
+    assert 'id="statistics-dialog"' in page.text
+    assert 'id="statistics-histogram"' in page.text
+    assert 'id="statistics-above-par"' in page.text
+    assert 'id="countdown-timer"' in page.text
     assert "createShareText" in script.text
+    assert 'statisticsCookieName = "poeper_results"' in script.text
+    assert "recordCompletedGame(state)" in script.text
+    assert "aboveParTotal" in script.text
+    assert "function renderStatistics()" in script.text
+    assert "function updateCountdown()" in script.text
     assert 'return "🟩"' in script.text
     assert 'return "🟨"' in script.text
     assert 'return "⬜"' in script.text
