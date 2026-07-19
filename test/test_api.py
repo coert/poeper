@@ -18,14 +18,15 @@ def test_frontend_is_served() -> None:
     assert page.status_code == 200
     assert "<title>POEPER 💩" in page.text
     assert ">💩</span>" in page.text
-    assert page.text.casefold().count(
-        "zelfs een grote boodschap houd je het best kort."
-    ) == 2
+    assert (
+        page.text.casefold().count("zelfs een grote boodschap houd je het best kort.")
+        == 2
+    )
     assert "onafhankelijke Nederlandstalige variant" in page.text
     assert 'href="https://poople.io/"' in page.text
     assert stylesheet.status_code == 200
     assert script.status_code == 200
-    assert 'requestGame("/game")' in script.text
+    assert 'requestGame("game")' in script.text
     assert "Die boodschap kwam er vlot uit." in script.text
     assert "Je hebt ’m eruit geperst." in script.text
     assert "launchPoopExplosion" in script.text
@@ -47,9 +48,7 @@ def test_game_api_tracks_a_user_until_completion(monkeypatch) -> None:
     assert initial_state["completed"] is False
 
     moves = ladder_moves(initial_state["start_word"])
-    invalid_response = client.post(
-        "/game/entries", json={"word": moves[1]}
-    )
+    invalid_response = client.post("/game/entries", json={"word": moves[1]})
     assert invalid_response.status_code == 400
     assert invalid_response.json()["detail"].startswith("Verander precies één letter")
 
@@ -65,9 +64,7 @@ def test_game_api_tracks_a_user_until_completion(monkeypatch) -> None:
     assert completed_state["completed"] is True
     assert completed_state["current_word"] == "BBBB"
 
-    completed_response = client.post(
-        "/game/entries", json={"word": moves[-1]}
-    )
+    completed_response = client.post("/game/entries", json={"word": moves[-1]})
     assert completed_response.status_code == 409
 
 

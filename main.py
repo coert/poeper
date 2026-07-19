@@ -19,6 +19,7 @@ WORD_LIST_PATH = Path(__file__).parent / "assets" / "wordlist.txt"
 STATIC_PATH = Path(__file__).parent / "static"
 SCHEDULE_PATH = Path(__file__).parent / "data" / "daily-words.json"
 ADMIN_TOKEN = os.environ.get("POEPER_ADMIN_TOKEN")
+ROOT_PATH = os.environ.get("POEPER_ROOT_PATH", "")
 USER_COOKIE_NAME = "word_ladder_user_id"
 USER_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
@@ -60,6 +61,13 @@ class ScheduledWordResponse(BaseModel):
     warning: str | None
 
 
+class RotateVerificationResponse(BaseModel):
+    days: int
+    rotated_days: int
+    failed_days: int
+    verification_completed: bool
+
+
 word_list = WORD_LIST_PATH.read_text(encoding="utf-8").splitlines()
 game = DailyWordGame(
     word_list,
@@ -68,7 +76,7 @@ game = DailyWordGame(
     word_assessor=assess_common_dutch_word,
 )
 
-app = FastAPI(title="Daily Dutch Word Ladder")
+app = FastAPI(title="Daily Dutch Word Ladder", root_path=ROOT_PATH)
 app.mount("/static", StaticFiles(directory=STATIC_PATH), name="static")
 
 
@@ -131,6 +139,35 @@ def rotate_daily_word(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 
 
+@app.post(
+    "/admin/api/daily-words/rotate-verification",
+    response_model=RotateVerificationResponse,
+)
+def rotate_word_verification(
+    days: int = Query(30, ge=1, le=30),
+    x_admin_token: str | None = Header(None),
+):
+    """Rotate upcoming words in bulk, then start background verification."""
+    require_admin_token(x_admin_token)
+
+    before_schedule = game.upcoming_words(days)
+    game.verify_upcoming_words(days)
+    after_schedule = game.upcoming_words(days)
+
+    rotated_days = sum(
+        1
+        for before, after in zip(before_schedule, after_schedule)
+        if before.word != after.word
+    )
+    failed_days = sum(1 for item in after_schedule if item.warning)
+    return RotateVerificationResponse(
+        days=days,
+        rotated_days=rotated_days,
+        failed_days=failed_days,
+        verification_completed=True,
+    )
+
+
 def get_or_create_user_id(request: Request, response: Response) -> str:
     """Return the UUID4 session ID, setting a new cookie when necessary."""
     cookie_value = request.cookies.get(USER_COOKIE_NAME)
@@ -138,7 +175,7 @@ def get_or_create_user_id(request: Request, response: Response) -> str:
         user_uuid = UUID(cookie_value) if cookie_value else None
         if user_uuid is None or user_uuid.version != 4:
             raise ValueError
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         user_uuid = uuid4()
         response.set_cookie(
             USER_COOKIE_NAME,

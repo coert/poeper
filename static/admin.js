@@ -1,4 +1,5 @@
 const elements = {
+  backToGameLink: document.querySelector("#back-to-game-link"),
   loginCard: document.querySelector("#login-card"),
   tokenForm: document.querySelector("#token-form"),
   tokenInput: document.querySelector("#token-input"),
@@ -6,12 +7,23 @@ const elements = {
   schedule: document.querySelector("#schedule"),
   scheduleMessage: document.querySelector("#schedule-message"),
   daysSelect: document.querySelector("#days-select"),
+  rotateVerificationButton: document.querySelector("#rotate-verification-button"),
   wordList: document.querySelector("#word-list"),
 };
 
 const TOKEN_KEY = "poeper-admin-token";
 let adminToken = sessionStorage.getItem(TOKEN_KEY) || "";
 let pollTimer = null;
+
+function adminApiUrl(path) {
+  const basePath = window.location.pathname.replace(/\/admin\/?$/, "");
+  return `${basePath}/admin/api${path}`;
+}
+
+function gameUrl() {
+  const basePath = window.location.pathname.replace(/\/admin\/?$/, "");
+  return basePath || "/";
+}
 
 async function adminRequest(url, options = {}) {
   const response = await fetch(url, {
@@ -107,7 +119,7 @@ async function loadSchedule() {
   elements.scheduleMessage.textContent = "Laden…";
   try {
     const words = await adminRequest(
-      `/admin/api/daily-words?days=${elements.daysSelect.value}`,
+      adminApiUrl(`/daily-words?days=${elements.daysSelect.value}`),
     );
     const verificationPending = renderWords(words);
     elements.loginCard.hidden = true;
@@ -134,10 +146,34 @@ async function rotateWord(date, button) {
   button.disabled = true;
   elements.scheduleMessage.textContent = "";
   try {
-    await adminRequest(`/admin/api/daily-words/${date}/rotate`, { method: "POST" });
+    await adminRequest(adminApiUrl(`/daily-words/${date}/rotate`), {
+      method: "POST",
+    });
     await loadSchedule();
   } catch (error) {
     elements.scheduleMessage.textContent = error.message;
+    button.disabled = false;
+  }
+}
+
+async function rotateVerification() {
+  const button = elements.rotateVerificationButton;
+  button.disabled = true;
+  elements.scheduleMessage.textContent = "Verificatie-rotatie gestart…";
+  try {
+    const result = await adminRequest(
+      adminApiUrl(`/daily-words/rotate-verification?days=${elements.daysSelect.value}`),
+      { method: "POST" },
+    );
+    await loadSchedule();
+    elements.scheduleMessage.textContent =
+      `Verificatierotatie voltooid: ${result.rotated_days}/${result.days} gewisseld.`
+      + (result.failed_days
+        ? ` ${result.failed_days} dag(en) konden niet worden gewisseld.`
+        : "");
+  } catch (error) {
+    elements.scheduleMessage.textContent = error.message;
+  } finally {
     button.disabled = false;
   }
 }
@@ -151,4 +187,6 @@ elements.tokenForm.addEventListener("submit", (event) => {
 });
 
 elements.daysSelect.addEventListener("change", loadSchedule);
+elements.rotateVerificationButton.addEventListener("click", rotateVerification);
+elements.backToGameLink.href = gameUrl();
 if (adminToken) loadSchedule();

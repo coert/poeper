@@ -75,7 +75,8 @@ token, uses the locked `uv` environment, and forwards shutdown signals directly
 to Uvicorn. The equivalent direct command is `uv run python production.py`.
 
 It listens on `0.0.0.0:8000` by default. Configure it with `POEPER_HOST`,
-`POEPER_PORT`, `POEPER_LOG_LEVEL`, and `POEPER_FORWARDED_ALLOW_IPS`.
+`POEPER_PORT`, `POEPER_LOG_LEVEL`, `POEPER_FORWARDED_ALLOW_IPS`, and
+`POEPER_ROOT_PATH`.
 
 Production mode marks the anonymous user cookie as `Secure`, so deploy it
 behind an HTTPS reverse proxy. For a trusted LAN deployment that deliberately
@@ -84,3 +85,56 @@ uses plain HTTP, explicitly set `POEPER_COOKIE_SECURE=false` before starting.
 The server intentionally uses one worker because user progress is held in
 memory. Moving user state to shared storage is required before increasing the
 worker count or running multiple replicas.
+
+## Docker deployment behind Apache
+
+This repository now includes a containerized deployment for serving POEPER at
+`https://bijenmeent85.ddns.net/poeper`.
+
+1. Create runtime secrets and settings:
+
+```bash
+cp .env.production.example .env.production
+chmod 600 .env.production
+```
+
+2. Start the service on localhost only:
+
+```bash
+docker compose up -d --build
+```
+
+This maps container port `8000` to `127.0.0.1:18000` and persists scheduling
+state in `./data`.
+
+3. Add Apache reverse proxy rules in
+`/etc/apache2/sites-available/000-default-le-ssl.conf`:
+
+```apache
+# POEPER under /poeper
+ProxyPass /poeper http://127.0.0.1:18000
+ProxyPassReverse /poeper http://127.0.0.1:18000
+
+# Optional hardening: limit admin panel and admin API to known source IPs.
+<LocationMatch "^/poeper/admin(?:/api/.*)?$">
+	<RequireAny>
+		Require ip 203.0.113.10
+		Require ip 2001:db8::/64
+	</RequireAny>
+</LocationMatch>
+
+# Keep deny-by-default, but explicitly allow poeper.
+<LocationMatch "^/(?!nextcloud|owncloud|poeper)(.*)$">
+	Require all denied
+</LocationMatch>
+```
+
+4. Validate and reload Apache:
+
+```bash
+sudo apachectl -t
+sudo systemctl reload apache2
+```
+
+Use `POEPER_ROOT_PATH=/poeper` (already set in `docker-compose.yml`) so FastAPI
+and browser routes behave correctly behind a path-prefix proxy.

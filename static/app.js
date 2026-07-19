@@ -117,7 +117,7 @@ async function requestGame(url, options = {}) {
 
 async function loadGame() {
   try {
-    renderState(await requestGame("/game"));
+    renderState(await requestGame("game"));
   } catch (error) {
     elements.loading.textContent = error.message;
   }
@@ -135,7 +135,7 @@ async function submitWord(event) {
   elements.message.textContent = "";
   const wasCompleted = gameState?.completed ?? false;
   try {
-    const state = await requestGame("/game/entries", {
+    const state = await requestGame("game/entries", {
       method: "POST",
       body: JSON.stringify({ word }),
     });

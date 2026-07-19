@@ -12,3 +12,5 @@ wheels/
 # Runtime schedule overrides
 data/daily-words.json
 data/*.tmp
+.env.production
+000-default-le-ssl.conf

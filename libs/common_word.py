@@ -15,6 +15,17 @@ DEFAULT_VLLM_MODEL = os.environ.get(
     "POEPER_VLLM_MODEL",
     "google/gemma-4-E4B-it",
 )
+
+
+def _load_retry_attempts() -> int:
+    configured_value = os.environ.get("POEPER_VLLM_RETRY_ATTEMPTS", "3")
+    try:
+        return max(1, int(configured_value))
+    except ValueError:
+        return 3
+
+
+DEFAULT_VLLM_RETRY_ATTEMPTS = _load_retry_attempts()
 ASSESSMENT_VERSION = 3
 
 logger = logging.getLogger(__name__)
@@ -34,6 +45,7 @@ def assess_common_dutch_word(
     url: str = DEFAULT_VLLM_URL,
     model: str = DEFAULT_VLLM_MODEL,
     timeout: float = 60,
+    retry_attempts: int = DEFAULT_VLLM_RETRY_ATTEMPTS,
 ) -> CommonWordAssessment:
     """Ask a local LLM whether a word is common, returning unknown on failure."""
     request_payload = {
@@ -53,9 +65,9 @@ def assess_common_dutch_word(
                     "daarnaast een gewone betekenis heeft. Zet ook afkortingen, "
                     "vreemde woorden, dialect, archaïsche spellingen, woordfragmenten "
                     "en zeldzame woorden op false. Kalibratie: HUIS, MARS, SPAR, KWAM, "
-                    "KLIM en SPIT zijn true. MESS, EIJS, EINS, SERT, THIE, DAGE, FINE "
-                    "en TIJN zijn false. Voornamen zoals LARS, NINA, MIRA, JUUL en "
-                    "DEMI zijn altijd false. "
+                    "KLIM, VLAK en SPIT zijn true. MESS, EIJS, EINS, SERT, THIE, DAGE, "
+                    "FINE en TIJN zijn false. Voornamen zoals LARS, NINA, MIRA, JUUL "
+                    "en DEMI zijn altijd false. "
                     "Controleer vóór je antwoord of de reden exact overeenkomt met "
                     "de boolean."
                 ),
@@ -94,42 +106,52 @@ def assess_common_dutch_word(
         method="POST",
     )
 
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            completion = json.load(response)
-        content = completion["choices"][0]["message"]["content"]
-        assessment = json.loads(content)
-        common = assessment["common"]
-        is_name = assessment["is_name"]
-        reason = assessment["reason"]
-        if (
-            not isinstance(common, bool)
-            or not isinstance(is_name, bool)
-            or not isinstance(reason, str)
-        ):
-            raise ValueError("ongeldig antwoordformaat")
-        return CommonWordAssessment(
-            common=common and not is_name,
-            reason=reason,
-            is_name=is_name,
-        )
-    except (
+    transient_errors = (OSError, TimeoutError, URLError)
+    terminal_errors = (
         IndexError,
         KeyError,
         TypeError,
         ValueError,
         json.JSONDecodeError,
-        OSError,
-        TimeoutError,
-        URLError,
-    ) as error:
-        warning = (
-            f"Taalmodel niet bereikbaar voor {word.upper()}; "
-            "het woord is zonder controle ingepland."
-        )
-        logger.warning("%s (%s)", warning, error)
-        return CommonWordAssessment(
-            common=None,
-            reason="Geen beoordeling beschikbaar.",
-            warning=warning,
-        )
+    )
+    attempts = max(1, retry_attempts)
+    last_error: Exception | None = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                completion = json.load(response)
+            content = completion["choices"][0]["message"]["content"]
+            assessment = json.loads(content)
+            common = assessment["common"]
+            is_name = assessment["is_name"]
+            reason = assessment["reason"]
+            if (
+                not isinstance(common, bool)
+                or not isinstance(is_name, bool)
+                or not isinstance(reason, str)
+            ):
+                raise ValueError("ongeldig antwoordformaat")
+            return CommonWordAssessment(
+                common=common and not is_name,
+                reason=reason,
+                is_name=is_name,
+            )
+        except transient_errors as error:
+            last_error = error
+            if attempt < attempts:
+                continue
+        except terminal_errors as error:
+            last_error = error
+            break
+
+    warning = (
+        f"Taalmodel niet bereikbaar voor {word.upper()}; "
+        "het woord is zonder controle ingepland."
+    )
+    logger.warning("%s (%s)", warning, last_error)
+    return CommonWordAssessment(
+        common=None,
+        reason="Geen beoordeling beschikbaar.",
+        warning=warning,
+    )

@@ -1,0 +1,22 @@
+services:
+  poeper:
+    build: .
+    container_name: poeper
+    user: "1000:1000"
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      POEPER_ENV: production
+      POEPER_HOST: 0.0.0.0
+      POEPER_PORT: 8000
+      POEPER_ROOT_PATH: /poeper
+      POEPER_FORWARDED_ALLOW_IPS: 127.0.0.1
+      UV_CACHE_DIR: /tmp/uv-cache
+      XDG_CACHE_HOME: /tmp
+      HOME: /tmp
+    ports:
+      - "127.0.0.1:18000:8000"
+    volumes:
+      - ./data:/app/data
+      - ../opentaal-wordlist/wordlist.txt:/app/assets/wordlist.txt:ro

@@ -105,9 +105,7 @@ class DailyWordGame:
         if len(eligible_words) < 2:
             raise ValueError("at least two eligible start words are required")
 
-        self._minimum_attempts = {
-            word: distances[word] for word in eligible_words
-        }
+        self._minimum_attempts = {word: distances[word] for word in eligible_words}
         self._eligible_words = sorted(
             eligible_words,
             key=lambda word: sha256(f"{self.target_word}:{word}".encode()).digest(),
@@ -187,9 +185,7 @@ class DailyWordGame:
                 if scheduled_date != day_key
             }
             for offset in range(1, len(self._eligible_words)):
-                candidate_index = (current_index + offset) % len(
-                    self._eligible_words
-                )
+                candidate_index = (current_index + offset) % len(self._eligible_words)
                 candidate = self._eligible_words[candidate_index]
                 if (
                     candidate not in used_words
@@ -240,8 +236,10 @@ class DailyWordGame:
                     word, schedule_changed = self._ensure_scheduled(day)
                     if schedule_changed:
                         self._save_schedule()
-                    if word in self._assessments:
+                    stored_assessment = self._assessments.get(word)
+                    if stored_assessment is not None:
                         break
+                    self._assessment_warnings.pop(word, None)
 
                 assessment = self._word_assessor(word)
 
@@ -283,9 +281,7 @@ class DailyWordGame:
                 raise InvalidMoveError(
                     "Dit woord staat niet in de toegestane woordenlijst."
                 )
-            if not is_one_character_different(
-                user_state.current_word, normalized_word
-            ):
+            if not is_one_character_different(user_state.current_word, normalized_word):
                 raise InvalidMoveError(
                     "Verander precies één letter ten opzichte van het huidige woord."
                 )
@@ -354,9 +350,7 @@ class DailyWordGame:
 
     def _archive_played_words(self) -> bool:
         today_key = self._today().isoformat()
-        due_dates = [
-            day for day in self._scheduled_words if day <= today_key
-        ]
+        due_dates = [day for day in self._scheduled_words if day <= today_key]
         for day in due_dates:
             self._played_words[day] = self._scheduled_words.pop(day)
             self._overridden_dates.discard(day)
@@ -378,7 +372,7 @@ class DailyWordGame:
             stored_schedule = json.loads(
                 self._schedule_path.read_text(encoding="utf-8")
             )
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             return {}, {}, set(), {}, {}
         if not isinstance(stored_schedule, dict):
             return {}, {}, set(), {}, {}
@@ -458,7 +452,7 @@ class DailyWordGame:
         for day, word in sorted(source.items()):
             try:
                 Date.fromisoformat(day)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             if (
                 isinstance(word, str)

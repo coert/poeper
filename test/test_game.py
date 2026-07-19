@@ -8,9 +8,7 @@ from libs.common_word import CommonWordAssessment
 from libs.game import DailyWordGame, GameAlreadyCompletedError, InvalidMoveError
 
 _TEST_START_WORDS = [
-    f"{first}{second}aa"
-    for first in "acdefghjkl"
-    for second in "mnopqrstuv"
+    f"{first}{second}aa" for first in "acdefghjkl" for second in "mnopqrstuv"
 ]
 _TEST_WORD_SET = {"bbbb"}
 for _start_word in _TEST_START_WORDS:
@@ -182,6 +180,40 @@ def test_unreachable_assessor_warns_but_keeps_the_word() -> None:
 
     assert scheduled.common is None
     assert scheduled.warning == warning
+
+
+def test_warning_assessments_are_retried_on_later_verification_passes() -> None:
+    calls: list[str] = []
+
+    def assess(word: str) -> CommonWordAssessment:
+        calls.append(word)
+        if len(calls) == 1:
+            return CommonWordAssessment(
+                common=None,
+                reason="Geen beoordeling.",
+                warning="Taalmodel niet bereikbaar; woord zonder controle ingepland.",
+            )
+        return CommonWordAssessment(common=True, reason="Gangbaar woord.")
+
+    game = DailyWordGame(
+        TEST_WORDS,
+        "bbbb",
+        today=lambda: date(2026, 7, 19),
+        word_assessor=assess,
+    )
+
+    game.upcoming_words(1)
+    game.verify_upcoming_words(1)
+    first_pass = game.upcoming_words(1)[0]
+    assert first_pass.common is None
+    assert first_pass.warning is not None
+
+    game.verify_upcoming_words(1)
+    second_pass = game.upcoming_words(1)[0]
+
+    assert len(calls) == 2
+    assert second_pass.common is True
+    assert second_pass.warning is None
 
 
 def test_word_verification_runs_in_a_daemon_thread() -> None:

@@ -3,6 +3,7 @@ from datetime import date
 from fastapi.testclient import TestClient
 
 import main
+from libs.common_word import CommonWordAssessment
 from libs.game import DailyWordGame
 from test.test_game import TEST_WORDS
 
@@ -14,12 +15,14 @@ def test_admin_page_is_served() -> None:
 
     assert page.status_code == 200
     assert "Komende dagwoorden" in page.text
+    assert "Roteer verificatie" in page.text
     assert client.get("/static/admin.css").status_code == 200
     script = client.get("/static/admin.js")
     assert script.status_code == 200
     assert "Geverifieerd" in script.text
     assert "Niet geverifieerd" in script.text
     assert "Wordt geverifieerd…" in script.text
+    assert "rotate-verification" in script.text
     assert "setTimeout(loadSchedule, 2000)" in script.text
 
 
@@ -77,3 +80,45 @@ def test_admin_cannot_rotate_today(monkeypatch) -> None:
     )
 
     assert response.status_code == 400
+
+
+def test_admin_can_rotate_verification_in_bulk(monkeypatch) -> None:
+    today = date(2026, 7, 19)
+    assessed_words: list[str] = []
+
+    def assess(word: str):
+        assessed_words.append(word)
+        return CommonWordAssessment(
+            common=len(assessed_words) > 1,
+            reason="testbeoordeling",
+        )
+
+    game = DailyWordGame(
+        TEST_WORDS,
+        "bbbb",
+        today=lambda: today,
+        word_assessor=assess,
+    )
+    monkeypatch.setattr(main, "game", game)
+    monkeypatch.setattr(main, "ADMIN_TOKEN", "test-secret")
+    client = TestClient(main.app)
+    headers = {"X-Admin-Token": "test-secret"}
+
+    before_words = [item.word for item in game.upcoming_words(7)]
+
+    response = client.post(
+        "/admin/api/daily-words/rotate-verification?days=7",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["days"] == 7
+    assert payload["rotated_days"] >= 1
+    assert payload["failed_days"] == 0
+    assert payload["verification_completed"] is True
+
+    after = client.get("/admin/api/daily-words?days=7", headers=headers)
+    assert after.status_code == 200
+    after_words = [item["word"] for item in after.json()]
+    assert before_words != after_words

@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>POEPER 💩 — beheer</title>
-  <link rel="stylesheet" href="/static/admin.css">
-  <script src="/static/admin.js" defer></script>
+  <link rel="stylesheet" href="static/admin.css">
+  <script src="static/admin.js" defer></script>
 </head>
 <body>
   <header>
-    <a href="/" class="back-link">← Naar het spel</a>
+    <a href="#" class="back-link" id="back-to-game-link">← Naar het spel</a>
     <div>
       <p class="eyebrow">Dagwoordbeheer</p>
       <h1>POEPER 💩</h1>
@@ -37,14 +38,19 @@
           <p class="eyebrow">Vooruitblik</p>
           <h2>Komende dagwoorden</h2>
         </div>
-        <label class="days-control">
-          Toon
-          <select id="days-select">
-            <option value="7">7 dagen</option>
-            <option value="14">14 dagen</option>
-            <option value="30" selected>30 dagen</option>
-          </select>
-        </label>
+        <div class="schedule-actions">
+          <label class="days-control">
+            Toon
+            <select id="days-select">
+              <option value="7">7 dagen</option>
+              <option value="14">14 dagen</option>
+              <option value="30" selected>30 dagen</option>
+            </select>
+          </label>
+          <button id="rotate-verification-button" type="button" class="rotate-button">
+            Roteer verificatie
+          </button>
+        </div>
       </div>
 
       <p class="schedule-note">

@@ -30,6 +30,7 @@ def test_assess_common_dutch_word_returns_structured_verdict(monkeypatch) -> Non
             }
         ]
     }
+
     def respond(request, timeout):
         requests.append(json.loads(request.data))
         return FakeResponse(json.dumps(completion).encode())
@@ -91,3 +92,52 @@ def test_assess_common_dutch_word_warns_and_allows_on_connection_error(
     assert assessment.common is None
     assert assessment.warning is not None
     assert "zonder controle ingepland" in caplog.text
+
+
+def test_assess_retries_on_transient_errors_then_succeeds(monkeypatch) -> None:
+    attempts = {"count": 0}
+    completion = {
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "common": True,
+                            "is_name": False,
+                            "reason": "Bekend Nederlands woord.",
+                        }
+                    )
+                }
+            }
+        ]
+    }
+
+    def flaky(request, timeout):
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            raise URLError("temporary")
+        return FakeResponse(json.dumps(completion).encode())
+
+    monkeypatch.setattr(common_word, "urlopen", flaky)
+
+    assessment = common_word.assess_common_dutch_word("slof", retry_attempts=3)
+
+    assert assessment.common is True
+    assert assessment.warning is None
+    assert attempts["count"] == 3
+
+
+def test_assess_warns_after_retry_exhaustion(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    def always_fails(request, timeout):
+        attempts["count"] += 1
+        raise URLError("offline")
+
+    monkeypatch.setattr(common_word, "urlopen", always_fails)
+
+    assessment = common_word.assess_common_dutch_word("slof", retry_attempts=3)
+
+    assert assessment.common is None
+    assert assessment.warning is not None
+    assert attempts["count"] == 3
