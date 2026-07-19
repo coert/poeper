@@ -1,0 +1,1 @@
+../../opentaal-wordlist/wordlist.txt

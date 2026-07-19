@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f1e8">
+  <title>POEPER 💩 — dagelijkse woordladder</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand-lockup">
+        <span class="eyebrow">Dagelijkse woordladder</span>
+        <h1>POEPER <span class="title-emoji" role="img" aria-label="poep">💩</span></h1>
+        <p class="brand-tagline">Zelfs een grote boodschap houd je het best kort.</p>
+      </div>
+      <button class="icon-button" id="help-button" type="button" aria-label="Speluitleg">?</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="game-shell" aria-labelledby="puzzle-title">
+      <div class="puzzle-heading">
+        <div>
+          <p class="puzzle-date" id="puzzle-date">Vandaag</p>
+          <h2 id="puzzle-title">Bereik <span id="target-label">POEP</span></h2>
+        </div>
+        <div class="attempt-pill"><span id="attempt-count">0</span> zetten</div>
+      </div>
+
+      <div class="rule-line">
+        Verander steeds precies <strong>één letter</strong>.
+      </div>
+
+      <div class="loading" id="loading" role="status">Puzzel laden…</div>
+      <div class="ladder" id="ladder" aria-live="polite"></div>
+
+      <div class="goal" id="goal" hidden>
+        <span class="goal-label">DOEL</span>
+        <div class="word-row goal-row" id="goal-word"></div>
+      </div>
+
+      <form class="entry-form" id="entry-form" hidden>
+        <label for="word-input">Volgend woord</label>
+        <div class="entry-controls">
+          <input
+            id="word-input"
+            name="word"
+            type="text"
+            maxlength="4"
+            inputmode="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            aria-describedby="message"
+            required
+          >
+          <button class="submit-button" id="submit-button" type="submit">ENTER</button>
+        </div>
+        <p class="message" id="message" role="alert"></p>
+      </form>
+
+      <div class="keyboard" id="keyboard" aria-label="Schermtoetsenbord" hidden></div>
+
+      <section class="result" id="result" hidden aria-live="polite">
+        <p class="result-kicker">Dagdoel gehaald</p>
+        <h2 id="result-title"></h2>
+        <div class="score-grid">
+          <div><strong id="result-attempts">0</strong><span>jouw zetten</span></div>
+          <div><strong id="result-minimum">0</strong><span>kortste route</span></div>
+        </div>
+        <p id="result-copy"></p>
+      </section>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      POEPER is een onafhankelijke Nederlandstalige variant van
+      <a href="https://poople.io/" target="_blank" rel="noopener noreferrer">Poople.io</a>.
+    </p>
+  </footer>
+
+  <dialog id="help-dialog">
+    <button class="dialog-close" id="help-close" type="button" aria-label="Sluiten">×</button>
+    <p class="eyebrow">Zo werkt het</p>
+    <h2>Maak een woordtrap</h2>
+    <ol>
+      <li>Begin bij het woord van vandaag.</li>
+      <li>Verander per zet precies één letter.</li>
+      <li>Gebruik alleen geldige Nederlandse woorden.</li>
+      <li>Bereik POEP in zo weinig mogelijk zetten — zelfs een grote boodschap houd je het best kort.</li>
+    </ol>
+    <div class="example-row">
+      <span>KOEK</span><span aria-hidden="true">→</span><span>POEK</span>
+    </div>
+  </dialog>
+</body>
+</html>

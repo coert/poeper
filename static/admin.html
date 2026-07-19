@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>POEPER 💩 — beheer</title>
+  <link rel="stylesheet" href="/static/admin.css">
+  <script src="/static/admin.js" defer></script>
+</head>
+<body>
+  <header>
+    <a href="/" class="back-link">← Naar het spel</a>
+    <div>
+      <p class="eyebrow">Dagwoordbeheer</p>
+      <h1>POEPER 💩</h1>
+    </div>
+  </header>
+
+  <main>
+    <section class="login-card" id="login-card">
+      <p class="eyebrow">Beveiligd beheer</p>
+      <h2>Voer je beheersleutel in</h2>
+      <p>De sleutel blijft alleen tijdens deze browsersessie bewaard.</p>
+      <form id="token-form">
+        <label for="token-input">Beheersleutel</label>
+        <div class="login-controls">
+          <input id="token-input" type="password" autocomplete="current-password" required>
+          <button type="submit">Open beheer</button>
+        </div>
+      </form>
+      <p class="message" id="login-message" role="alert"></p>
+    </section>
+
+    <section class="schedule" id="schedule" hidden>
+      <div class="schedule-heading">
+        <div>
+          <p class="eyebrow">Vooruitblik</p>
+          <h2>Komende dagwoorden</h2>
+        </div>
+        <label class="days-control">
+          Toon
+          <select id="days-select">
+            <option value="7">7 dagen</option>
+            <option value="14">14 dagen</option>
+            <option value="30" selected>30 dagen</option>
+          </select>
+        </label>
+      </div>
+
+      <p class="schedule-note">
+        Geen woord komt dubbel voor in de planning en eerder gespeelde woorden keren
+        niet terug. Een wissel wordt direct opgeslagen; vandaag blijft altijd staan.
+      </p>
+      <p class="message" id="schedule-message" role="alert"></p>
+      <div class="word-list" id="word-list" aria-live="polite"></div>
+    </section>
+  </main>
+</body>
+</html>

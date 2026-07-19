@@ -1,0 +1,86 @@
+## Daily word-ladder API
+
+Start the development server from the project root:
+
+```bash
+uv run fastapi dev main.py
+```
+
+Open the game at `http://127.0.0.1:8000/`. Interactive API documentation is
+available at `http://127.0.0.1:8000/docs`.
+
+Get today's game. A UUID4 user ID is created automatically and stored in an
+HTTP-only cookie:
+
+```http
+GET /game
+```
+
+Submit the next word:
+
+```http
+POST /game/entries
+Content-Type: application/json
+
+{"word": "next"}
+```
+
+A valid entry must be in the filtered word list and differ from the user's
+current word by exactly one character. Valid entries increase `attempts` by
+one. The game is completed when `current_word` equals `target_word`. On
+completion, `minimum_attempts` reports the shortest possible route from that
+day's start word; it is `null` while the game is still active.
+
+API documentation is available at `/docs` while the server is running.
+
+## Daily-word administration
+
+Set a private admin token when starting the API:
+
+```bash
+POEPER_ADMIN_TOKEN="choose-a-long-random-secret" uv run fastapi dev main.py
+```
+
+Then open `http://127.0.0.1:8000/admin`. The dashboard lists the upcoming
+daily words and lets you rotate individual future dates. Overrides are stored
+in `data/daily-words.json` and survive server restarts. This file also records
+played words so they cannot be scheduled again. The upcoming 30-day schedule
+contains no duplicates, including after manual rotations. The token is
+retained only in the browser tab's session storage.
+
+Future words are checked with the OpenAI-compatible vLLM server at
+`http://spark-0240:8000`. Words classified as uncommon are skipped and the
+next unused candidate is checked. Verification runs asynchronously in a
+daemon thread, so the admin page loads immediately and server shutdown is not
+held up by an active model request. The page polls while words display
+`Wordt geverifieerd…`. Results are cached in the schedule file. If the model
+is unavailable, the candidate remains scheduled and the admin page displays
+a warning instead of failing schedule generation.
+
+The model connection can be changed with `POEPER_VLLM_URL` and
+`POEPER_VLLM_MODEL`. Schedule generation is limited to 30 future days.
+
+## Production
+
+The production entrypoint starts the FastAPI application with Uvicorn, uses
+one worker, disables autoreload, and trusts proxy headers from localhost:
+
+```bash
+export POEPER_ADMIN_TOKEN="choose-a-long-random-secret"
+./start-production.sh
+```
+
+The script can be launched from any working directory. It validates the admin
+token, uses the locked `uv` environment, and forwards shutdown signals directly
+to Uvicorn. The equivalent direct command is `uv run python production.py`.
+
+It listens on `0.0.0.0:8000` by default. Configure it with `POEPER_HOST`,
+`POEPER_PORT`, `POEPER_LOG_LEVEL`, and `POEPER_FORWARDED_ALLOW_IPS`.
+
+Production mode marks the anonymous user cookie as `Secure`, so deploy it
+behind an HTTPS reverse proxy. For a trusted LAN deployment that deliberately
+uses plain HTTP, explicitly set `POEPER_COOKIE_SECURE=false` before starting.
+
+The server intentionally uses one worker because user progress is held in
+memory. Moving user state to shared storage is required before increasing the
+worker count or running multiple replicas.
