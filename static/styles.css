@@ -388,6 +388,59 @@ button:focus-visible {
   font-size: .78rem;
 }
 
+.share-button,
+.share-copy-button {
+  min-height: 46px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #fff;
+  cursor: pointer;
+  font-size: .78rem;
+  font-weight: 850;
+  letter-spacing: .06em;
+}
+
+.share-button {
+  margin-top: 8px;
+}
+
+.share-preview {
+  width: fit-content;
+  min-width: 220px;
+  max-width: 100%;
+  margin: 22px auto 18px;
+  padding: 18px 22px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 55%);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 1rem;
+  line-height: 1.55;
+  text-align: left;
+  white-space: pre;
+}
+
+.share-copy-button {
+  width: 100%;
+}
+
+.copy-status {
+  min-height: 20px;
+  margin: 8px 0 0;
+  color: var(--success);
+  font-size: .78rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+.clipboard-fallback {
+  position: fixed;
+  left: -9999px;
+}
+
 dialog {
   width: min(100% - 32px, 480px);
   padding: 32px;

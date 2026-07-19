@@ -16,6 +16,12 @@ const elements = {
   resultAttempts: document.querySelector("#result-attempts"),
   resultMinimum: document.querySelector("#result-minimum"),
   resultCopy: document.querySelector("#result-copy"),
+  shareButton: document.querySelector("#share-button"),
+  shareDialog: document.querySelector("#share-dialog"),
+  shareClose: document.querySelector("#share-close"),
+  sharePreview: document.querySelector("#share-preview"),
+  shareCopyButton: document.querySelector("#share-copy-button"),
+  copyStatus: document.querySelector("#copy-status"),
   helpButton: document.querySelector("#help-button"),
   helpDialog: document.querySelector("#help-dialog"),
   helpClose: document.querySelector("#help-close"),
@@ -27,6 +33,30 @@ const keyboardRows = [
   ["ENTER", ..."ZXCVBNM", "BACKSPACE"],
 ];
 let gameState = null;
+
+function createShareText(state) {
+  let previousWord = state.start_word;
+  const rows = state.entries.map((word) => {
+    const squares = [...word].map((letter, index) => {
+      if (state.target_word[index] === letter) return "🟩";
+      if (previousWord[index] !== letter) return "🟨";
+      return "⬜";
+    }).join("");
+    previousWord = word;
+    return squares;
+  });
+  const distanceFromPar = state.attempts - state.minimum_attempts;
+  const parLine = distanceFromPar === 0
+    ? `Op par (${state.minimum_attempts})`
+    : `${distanceFromPar > 0 ? "+" : ""}${distanceFromPar} van par (${state.minimum_attempts})`;
+  return [
+    `POEPER 💩 ${state.date}`,
+    "",
+    ...rows,
+    "",
+    parLine,
+  ].join("\n");
+}
 
 function createWordRow(word, previousWord = "", targetWord = "") {
   const row = document.createElement("div");
@@ -98,10 +128,41 @@ function renderState(state) {
     elements.resultCopy.textContent = extra === 0
       ? "De kortste route — perfect gespeeld."
       : `${extra} ${extra === 1 ? "zet" : "zetten"} boven de kortste route.`;
+    elements.sharePreview.textContent = createShareText(state);
   } else {
     elements.input.value = "";
     elements.input.focus();
   }
+}
+
+async function copyShareResult() {
+  const shareText = createShareText(gameState);
+  try {
+    await navigator.clipboard.writeText(shareText);
+  } catch (error) {
+    const textArea = document.createElement("textarea");
+    textArea.value = shareText;
+    textArea.setAttribute("readonly", "");
+    textArea.className = "clipboard-fallback";
+    document.body.append(textArea);
+    textArea.select();
+    const copied = document.execCommand("copy");
+    textArea.remove();
+    if (!copied) {
+      elements.copyStatus.textContent = "Kopiëren lukte niet. Selecteer het overzicht hierboven.";
+      return;
+    }
+  }
+  elements.copyStatus.textContent = "Overzicht gekopieerd!";
+  elements.shareCopyButton.textContent = "Gekopieerd";
+}
+
+function openShareDialog() {
+  if (!gameState?.completed) return;
+  elements.sharePreview.textContent = createShareText(gameState);
+  elements.copyStatus.textContent = "";
+  elements.shareCopyButton.textContent = "Kopieer overzicht";
+  elements.shareDialog.showModal();
 }
 
 async function requestGame(url, options = {}) {
@@ -111,7 +172,11 @@ async function requestGame(url, options = {}) {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
   });
   const payload = await response.json();
-  if (!response.ok) throw new Error(payload.detail || "Er ging iets mis.");
+  if (!response.ok) {
+    const error = new Error(payload.detail || "Er ging iets mis.");
+    error.status = response.status;
+    throw error;
+  }
   return payload;
 }
 
@@ -143,6 +208,26 @@ async function submitWord(event) {
     if (state.completed && !wasCompleted) launchPoopExplosion();
   } catch (error) {
     showError(error.message);
+  } finally {
+    elements.submit.disabled = false;
+  }
+}
+
+async function useDevelopmentCheat(event) {
+  const isCheatShortcut = (event.ctrlKey || event.metaKey)
+    && event.shiftKey
+    && event.key === "Enter";
+  if (!isCheatShortcut || gameState?.completed) return;
+
+  event.preventDefault();
+  elements.submit.disabled = true;
+  elements.message.textContent = "";
+  try {
+    const state = await requestGame("game/cheat", { method: "POST" });
+    renderState(state);
+    launchPoopExplosion();
+  } catch (error) {
+    if (error.status !== 404) showError(error.message);
   } finally {
     elements.submit.disabled = false;
   }
@@ -249,11 +334,18 @@ elements.input.addEventListener("input", () => {
   elements.input.value = elements.input.value.replace(/[^a-z]/gi, "").toUpperCase();
   elements.message.textContent = "";
 });
+document.addEventListener("keydown", useDevelopmentCheat);
 elements.form.addEventListener("submit", submitWord);
 elements.helpButton.addEventListener("click", () => elements.helpDialog.showModal());
 elements.helpClose.addEventListener("click", () => elements.helpDialog.close());
+elements.shareButton.addEventListener("click", openShareDialog);
+elements.shareClose.addEventListener("click", () => elements.shareDialog.close());
+elements.shareCopyButton.addEventListener("click", copyShareResult);
 elements.helpDialog.addEventListener("click", (event) => {
   if (event.target === elements.helpDialog) elements.helpDialog.close();
+});
+elements.shareDialog.addEventListener("click", (event) => {
+  if (event.target === elements.shareDialog) elements.shareDialog.close();
 });
 
 buildKeyboard();

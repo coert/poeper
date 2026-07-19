@@ -9,6 +9,10 @@ uv run fastapi dev main.py
 Open the game at `http://127.0.0.1:8000/`. Interactive API documentation is
 available at `http://127.0.0.1:8000/docs`.
 
+During local development, press Ctrl+Shift+Enter (or Cmd+Shift+Enter on macOS)
+to fill in a shortest solution and test the completed-game UI. This shortcut
+is disabled whenever `POEPER_ENV=production`.
+
 Get today's game. A UUID4 user ID is created automatically and stored in an
 HTTP-only cookie:
 

@@ -16,7 +16,7 @@ from .word_filter import (
     is_one_character_different,
     select_four_letter_words,
 )
-from .word_ladder import reachable_words_with_steps
+from .word_ladder import reachable_words_with_steps, shortest_word_ladder
 
 logger = logging.getLogger(__name__)
 
@@ -290,6 +290,32 @@ class DailyWordGame:
             user_state.entries.append(normalized_word)
             user_state.attempts += 1
             user_state.completed = normalized_word == self.target_word
+            return self._snapshot(user_state)
+
+    def complete_with_shortest_route(self, user_id: str) -> GameState:
+        """Complete a user's current game using a shortest remaining route."""
+        normalized_user_id = user_id.strip()
+        if not normalized_user_id:
+            raise ValueError("user_id cannot be empty")
+
+        with self._lock:
+            user_state = self._state_for_today(normalized_user_id)
+            if user_state.completed:
+                return self._snapshot(user_state)
+
+            route = shortest_word_ladder(
+                self.words,
+                user_state.current_word,
+                self.target_word,
+            )
+            if route is None:
+                raise ValueError("Er is geen route naar het doel gevonden.")
+
+            for word in route[1:]:
+                user_state.current_word = word
+                user_state.entries.append(word)
+                user_state.attempts += 1
+            user_state.completed = True
             return self._snapshot(user_state)
 
     def _state_for_today(self, user_id: str) -> _UserState:

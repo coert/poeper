@@ -11,6 +11,7 @@ from .word_ladder import (
     has_minimum_letter_changes,
     minimum_letter_changes,
     reachable_words_with_steps,
+    shortest_word_ladder,
 )
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "minimum_letter_changes",
     "reachable_words_with_steps",
     "select_four_letter_words",
+    "shortest_word_ladder",
 ]

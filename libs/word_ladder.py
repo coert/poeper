@@ -111,6 +111,52 @@ def minimum_letter_changes(
     return None
 
 
+def shortest_word_ladder(
+    words: list[str], start_word: str, target_word: str
+) -> list[str] | None:
+    """Return a shortest word ladder, including its start and target words."""
+    start = start_word.casefold()
+    target = target_word.casefold()
+
+    if start == target:
+        return [start]
+    if len(start) != len(target):
+        return None
+
+    available_words = {
+        word.casefold() for word in words if len(word.casefold()) == len(start)
+    }
+    if start not in available_words:
+        return None
+    available_words.add(target)
+
+    words_by_pattern: dict[str, list[str]] = defaultdict(list)
+    for word in available_words:
+        for index in range(len(word)):
+            pattern = f"{word[:index]}*{word[index + 1:]}"
+            words_by_pattern[pattern].append(word)
+
+    queue = deque([start])
+    previous_words: dict[str, str | None] = {start: None}
+
+    while queue:
+        word = queue.popleft()
+        for index in range(len(word)):
+            pattern = f"{word[:index]}*{word[index + 1:]}"
+            for next_word in words_by_pattern.pop(pattern, []):
+                if next_word in previous_words:
+                    continue
+                previous_words[next_word] = word
+                if next_word == target:
+                    ladder = [target]
+                    while previous_words[ladder[-1]] is not None:
+                        ladder.append(previous_words[ladder[-1]])
+                    return list(reversed(ladder))
+                queue.append(next_word)
+
+    return None
+
+
 def has_minimum_letter_changes(
     words: list[str],
     start_word: str,

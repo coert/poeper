@@ -37,6 +37,11 @@ COOKIE_SECURE = environment_flag(
 )
 
 
+def is_development_mode() -> bool:
+    """Return whether local development-only conveniences may run."""
+    return os.environ.get("POEPER_ENV", "development").casefold() == "development"
+
+
 class WordEntry(BaseModel):
     word: str = Field(min_length=1, max_length=32)
 
@@ -207,4 +212,16 @@ def submit_entry(entry: WordEntry, request: Request, response: Response):
     except GameAlreadyCompletedError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     except (InvalidMoveError, ValueError) as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
+
+
+@app.post("/game/cheat", response_model=GameResponse, include_in_schema=False)
+def complete_game_for_development(request: Request, response: Response):
+    """Complete the game by a shortest route during local development only."""
+    if not is_development_mode():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Niet beschikbaar.")
+    try:
+        user_id = get_or_create_user_id(request, response)
+        return game.complete_with_shortest_route(user_id)
+    except ValueError as error:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error

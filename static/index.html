@@ -73,6 +73,7 @@
           <div><strong id="result-minimum">0</strong><span>kortste route</span></div>
         </div>
         <p id="result-copy"></p>
+        <button class="share-button" id="share-button" type="button">Resultaat delen</button>
       </section>
     </section>
   </main>
@@ -97,6 +98,15 @@
     <div class="example-row">
       <span>KOEK</span><span aria-hidden="true">→</span><span>POEK</span>
     </div>
+  </dialog>
+
+  <dialog id="share-dialog" aria-labelledby="share-title">
+    <button class="dialog-close" id="share-close" type="button" aria-label="Sluiten">×</button>
+    <p class="eyebrow">Deel je resultaat</p>
+    <h2 id="share-title">Jouw woordtrap</h2>
+    <pre class="share-preview" id="share-preview"></pre>
+    <button class="share-copy-button" id="share-copy-button" type="button">Kopieer overzicht</button>
+    <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
   </dialog>
 </body>
 </html>

@@ -5,6 +5,7 @@ from libs.word_ladder import (
     choose_reachable_word,
     has_minimum_letter_changes,
     minimum_letter_changes,
+    shortest_word_ladder,
 )
 
 
@@ -80,3 +81,15 @@ def test_minimum_letter_changes(
     expected: int | None,
 ) -> None:
     assert minimum_letter_changes(words, start_word, target_word) == expected
+
+
+def test_shortest_word_ladder_returns_the_route() -> None:
+    words = ["aaaa", "baaa", "bbaa", "bbba", "zzzz"]
+
+    route = shortest_word_ladder(words, "AAAA", "BBBB")
+
+    assert route == ["aaaa", "baaa", "bbaa", "bbba", "bbbb"]
+
+
+def test_shortest_word_ladder_returns_none_when_unreachable() -> None:
+    assert shortest_word_ladder(["aaaa", "zzzz"], "aaaa", "bbbb") is None
