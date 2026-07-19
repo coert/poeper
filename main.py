@@ -1,10 +1,11 @@
 """FastAPI application for the daily word-ladder game."""
 
-from datetime import date
+from datetime import date, datetime
 import os
 from pathlib import Path
 from secrets import compare_digest
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse
@@ -23,6 +24,7 @@ ADMIN_TOKEN = os.environ.get("POEPER_ADMIN_TOKEN")
 ROOT_PATH = os.environ.get("POEPER_ROOT_PATH", "")
 USER_COOKIE_NAME = "word_ladder_user_id"
 USER_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+GAME_TIME_ZONE = ZoneInfo(os.environ.get("POEPER_TIME_ZONE", "Europe/Amsterdam"))
 
 
 def environment_flag(name: str, *, default: bool = False) -> bool:
@@ -41,6 +43,27 @@ COOKIE_SECURE = environment_flag(
 def is_development_mode() -> bool:
     """Return whether local development-only conveniences may run."""
     return os.environ.get("POEPER_ENV", "development").casefold() == "development"
+
+
+def game_date_at(
+    instant: datetime | None = None, time_zone: ZoneInfo = GAME_TIME_ZONE
+) -> date:
+    """Return the calendar date at an instant in the requested time zone."""
+    current_time = instant or datetime.now(tz=time_zone)
+    if current_time.tzinfo is None:
+        raise ValueError("instant must include timezone information")
+    return current_time.astimezone(time_zone).date()
+
+
+def client_game_date(time_zone_name: str | None) -> date:
+    """Return today's date for a client, retaining the default for old clients."""
+    if not time_zone_name:
+        return game_date_at()
+    try:
+        time_zone = ZoneInfo(time_zone_name)
+    except ZoneInfoNotFoundError as error:
+        raise ValueError("De tijdzone van je browser wordt niet herkend.") from error
+    return game_date_at(time_zone=time_zone)
 
 
 class WordEntry(BaseModel):
@@ -81,6 +104,7 @@ game = DailyWordGame(
     TARGET_WORD,
     start_words=start_word_list,
     maximum_steps=8,
+    today=game_date_at,
     schedule_path=SCHEDULE_PATH,
     word_assessor=assess_common_dutch_word,
 )
@@ -216,21 +240,33 @@ def get_or_create_user_id(request: Request, response: Response) -> str:
 
 
 @app.get("/game", response_model=GameResponse)
-def get_game(request: Request, response: Response):
+def get_game(
+    request: Request,
+    response: Response,
+    x_client_time_zone: str | None = Header(None),
+):
     """Get or start today's game for a user."""
+    response.headers["Cache-Control"] = "no-store"
     try:
         user_id = get_or_create_user_id(request, response)
-        return game.get_state(user_id)
+        return game.get_state(user_id, client_game_date(x_client_time_zone))
     except ValueError as error:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 
 
 @app.post("/game/entries", response_model=GameResponse)
-def submit_entry(entry: WordEntry, request: Request, response: Response):
+def submit_entry(
+    entry: WordEntry,
+    request: Request,
+    response: Response,
+    x_client_time_zone: str | None = Header(None),
+):
     """Submit a word that differs by one character from the current word."""
     try:
         user_id = get_or_create_user_id(request, response)
-        return game.submit_word(user_id, entry.word)
+        return game.submit_word(
+            user_id, entry.word, client_game_date(x_client_time_zone)
+        )
     except GameAlreadyCompletedError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     except (InvalidMoveError, ValueError) as error:
@@ -238,12 +274,18 @@ def submit_entry(entry: WordEntry, request: Request, response: Response):
 
 
 @app.post("/game/cheat", response_model=GameResponse, include_in_schema=False)
-def complete_game_for_development(request: Request, response: Response):
+def complete_game_for_development(
+    request: Request,
+    response: Response,
+    x_client_time_zone: str | None = Header(None),
+):
     """Complete the game by a shortest route during local development only."""
     if not is_development_mode():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Niet beschikbaar.")
     try:
         user_id = get_or_create_user_id(request, response)
-        return game.complete_with_shortest_route(user_id)
+        return game.complete_with_shortest_route(
+            user_id, client_game_date(x_client_time_zone)
+        )
     except ValueError as error:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error

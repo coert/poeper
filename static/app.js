@@ -37,6 +37,7 @@ const elements = {
 
 const statisticsCookieName = "poeper_results";
 const statisticsCookieMaxAge = 60 * 60 * 24 * 400;
+const clientTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 const keyboardRows = [
   [..."QWERTYUIOP"],
@@ -329,10 +330,13 @@ function openShareDialog() {
 }
 
 async function requestGame(url, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (clientTimeZone) headers["X-Client-Time-Zone"] = clientTimeZone;
   const response = await fetch(url, {
     credentials: "same-origin",
+    cache: "no-store",
     ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers,
   });
   const payload = await response.json();
   if (!response.ok) {

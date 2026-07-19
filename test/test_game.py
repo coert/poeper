@@ -109,6 +109,16 @@ def test_user_state_resets_on_a_new_day() -> None:
     assert reset_state.start_word != original_state.start_word
 
 
+def test_user_state_can_follow_an_explicit_client_date() -> None:
+    server_day = date(2026, 7, 19)
+    client_day = date(2026, 7, 20)
+    game = DailyWordGame(TEST_WORDS, "bbbb", today=lambda: server_day)
+
+    state = game.get_state("player", client_day)
+
+    assert state.date == client_day
+
+
 def test_future_daily_word_is_randomly_rotated_and_persisted(
     monkeypatch, tmp_path
 ) -> None:

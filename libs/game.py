@@ -324,22 +324,24 @@ class DailyWordGame:
                     if assessment.common is not False:
                         break
 
-    def get_state(self, user_id: str) -> GameState:
-        """Return a user's state, creating or resetting today's game as needed."""
+    def get_state(self, user_id: str, day: Date | None = None) -> GameState:
+        """Return a user's state, creating or resetting the requested game."""
         normalized_user_id = user_id.strip()
         if not normalized_user_id:
             raise ValueError("user_id cannot be empty")
 
         with self._lock:
-            user_state = self._state_for_today(normalized_user_id)
+            user_state = self._state_for_day(normalized_user_id, day)
             return self._snapshot(user_state)
 
-    def submit_word(self, user_id: str, word: str) -> GameState:
+    def submit_word(
+        self, user_id: str, word: str, day: Date | None = None
+    ) -> GameState:
         """Apply one valid letter change and return the updated user state."""
         normalized_word = _normalize_word(word)
 
         with self._lock:
-            user_state = self._state_for_today(user_id.strip())
+            user_state = self._state_for_day(user_id.strip(), day)
             if user_state.completed:
                 raise GameAlreadyCompletedError(
                     "Je hebt het doel van vandaag al bereikt."
@@ -361,14 +363,16 @@ class DailyWordGame:
             user_state.completed = normalized_word == self.target_word
             return self._snapshot(user_state)
 
-    def complete_with_shortest_route(self, user_id: str) -> GameState:
+    def complete_with_shortest_route(
+        self, user_id: str, day: Date | None = None
+    ) -> GameState:
         """Complete a user's current game using a shortest remaining route."""
         normalized_user_id = user_id.strip()
         if not normalized_user_id:
             raise ValueError("user_id cannot be empty")
 
         with self._lock:
-            user_state = self._state_for_today(normalized_user_id)
+            user_state = self._state_for_day(normalized_user_id, day)
             if user_state.completed:
                 return self._snapshot(user_state)
 
@@ -387,16 +391,16 @@ class DailyWordGame:
             user_state.completed = True
             return self._snapshot(user_state)
 
-    def _state_for_today(self, user_id: str) -> _UserState:
+    def _state_for_day(self, user_id: str, day: Date | None = None) -> _UserState:
         if not user_id:
             raise ValueError("user_id cannot be empty")
 
-        today = self._today()
+        selected_day = day or self._today()
         user_state = self._user_states.get(user_id)
-        if user_state is None or user_state.date != today:
-            start_word = self.daily_start_word(today)
+        if user_state is None or user_state.date != selected_day:
+            start_word = self.daily_start_word(selected_day)
             user_state = _UserState(
-                today,
+                selected_day,
                 start_word,
                 start_word,
                 self._minimum_attempts[start_word],

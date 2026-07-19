@@ -155,3 +155,8 @@ sudo systemctl reload apache2
 
 Use `POEPER_ROOT_PATH=/poeper` (already set in `docker-compose.yml`) so FastAPI
 and browser routes behave correctly behind a path-prefix proxy.
+
+Browsers send their IANA time-zone name with game requests, so each player's
+puzzle rolls over at midnight in their own local time. Clients that do not send
+a time zone fall back to `Europe/Amsterdam`; set `POEPER_TIME_ZONE` to change
+that fallback.

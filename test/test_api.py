@@ -1,5 +1,6 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
@@ -48,11 +49,42 @@ def test_frontend_is_served() -> None:
     assert "aboveParTotal" in script.text
     assert "function renderStatistics()" in script.text
     assert "function updateCountdown()" in script.text
+    assert 'cache: "no-store"' in script.text
+    assert 'headers["X-Client-Time-Zone"] = clientTimeZone' in script.text
     assert 'return "🟩"' in script.text
     assert 'return "🟨"' in script.text
     assert 'return "⬜"' in script.text
     assert "navigator.clipboard.writeText" in script.text
     assert "van par" in script.text
+
+
+def test_game_date_uses_the_requested_time_zone() -> None:
+    instant = datetime(2026, 7, 20, 1, 0, tzinfo=timezone.utc)
+
+    assert main.game_date_at(instant, ZoneInfo("Europe/Amsterdam")) == date(
+        2026, 7, 20
+    )
+    assert main.game_date_at(instant, ZoneInfo("America/New_York")) == date(
+        2026, 7, 19
+    )
+
+
+def test_invalid_client_time_zone_is_rejected() -> None:
+    response = TestClient(main.app).get(
+        "/game", headers={"X-Client-Time-Zone": "Not/A-Time-Zone"}
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "De tijdzone van je browser wordt niet herkend."
+
+
+def test_game_response_is_not_cached(monkeypatch) -> None:
+    game = DailyWordGame(TEST_WORDS, "bbbb", today=lambda: date(2026, 7, 19))
+    monkeypatch.setattr(main, "game", game)
+
+    response = TestClient(main.app).get("/game")
+
+    assert response.headers["cache-control"] == "no-store"
 
 
 def test_game_api_tracks_a_user_until_completion(monkeypatch) -> None:
