@@ -109,10 +109,44 @@ function renderWords(words) {
     rotateButton.textContent = "Wissel";
     rotateButton.addEventListener("click", () => rotateWord(item.date, rotateButton));
 
-    row.append(dateBlock, word, details, rotateButton);
+    const blacklistButton = document.createElement("button");
+    blacklistButton.className = "blacklist-button";
+    blacklistButton.type = "button";
+    blacklistButton.textContent = "Blokkeer";
+    blacklistButton.setAttribute("aria-label", `${item.word} op de zwarte lijst zetten`);
+    blacklistButton.addEventListener("click", () => blacklistWord(
+      item.date,
+      item.word,
+      blacklistButton,
+    ));
+
+    const actions = document.createElement("div");
+    actions.className = "word-actions";
+    actions.append(rotateButton, blacklistButton);
+
+    row.append(dateBlock, word, details, actions);
     elements.wordList.append(row);
   });
   return words.some((item) => item.common === null && !item.warning);
+}
+
+async function blacklistWord(date, word, button) {
+  if (!window.confirm(
+    `${word} blokkeren? Het woord verdwijnt uit de planning en uit het spel.`,
+  )) return;
+
+  button.disabled = true;
+  elements.scheduleMessage.textContent = "";
+  try {
+    await adminRequest(adminApiUrl(`/daily-words/${date}/blacklist`), {
+      method: "POST",
+    });
+    await loadSchedule();
+    elements.scheduleMessage.textContent = `${word} is geblokkeerd en vervangen.`;
+  } catch (error) {
+    elements.scheduleMessage.textContent = error.message;
+    button.disabled = false;
+  }
 }
 
 async function loadSchedule() {

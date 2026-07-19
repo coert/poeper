@@ -16,6 +16,7 @@ from libs.game import DailyWordGame, GameAlreadyCompletedError, InvalidMoveError
 
 TARGET_WORD = "POEP"
 WORD_LIST_PATH = Path(__file__).parent / "assets" / "wordlist.txt"
+START_WORD_LIST_PATH = Path(__file__).parent / "assets" / "basiswoorden.txt"
 STATIC_PATH = Path(__file__).parent / "static"
 SCHEDULE_PATH = Path(__file__).parent / "data" / "daily-words.json"
 ADMIN_TOKEN = os.environ.get("POEPER_ADMIN_TOKEN")
@@ -74,9 +75,12 @@ class RotateVerificationResponse(BaseModel):
 
 
 word_list = WORD_LIST_PATH.read_text(encoding="utf-8").splitlines()
+start_word_list = START_WORD_LIST_PATH.read_text(encoding="utf-8").splitlines()
 game = DailyWordGame(
     word_list,
     TARGET_WORD,
+    start_words=start_word_list,
+    maximum_steps=8,
     schedule_path=SCHEDULE_PATH,
     word_assessor=assess_common_dutch_word,
 )
@@ -138,6 +142,24 @@ def rotate_daily_word(
     require_admin_token(x_admin_token)
     try:
         scheduled_word = game.rotate_daily_word(scheduled_date)
+        game.start_word_verification(30)
+        return scheduled_word
+    except ValueError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
+
+
+@app.post(
+    "/admin/api/daily-words/{scheduled_date}/blacklist",
+    response_model=ScheduledWordResponse,
+)
+def blacklist_daily_word(
+    scheduled_date: date,
+    x_admin_token: str | None = Header(None),
+):
+    """Blacklist one future word and replace it in the schedule."""
+    require_admin_token(x_admin_token)
+    try:
+        scheduled_word = game.blacklist_daily_word(scheduled_date)
         game.start_word_verification(30)
         return scheduled_word
     except ValueError as error:

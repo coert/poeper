@@ -23,6 +23,8 @@ def test_admin_page_is_served() -> None:
     assert "Niet geverifieerd" in script.text
     assert "Wordt geverifieerd…" in script.text
     assert "rotate-verification" in script.text
+    assert "Blokkeer" in script.text
+    assert "/blacklist" in script.text
     assert "setTimeout(loadSchedule, 2000)" in script.text
 
 
@@ -80,6 +82,38 @@ def test_admin_cannot_rotate_today(monkeypatch) -> None:
     )
 
     assert response.status_code == 400
+
+
+def test_admin_can_blacklist_and_replace_a_future_word(monkeypatch, tmp_path) -> None:
+    today = date(2026, 7, 19)
+    game = DailyWordGame(
+        TEST_WORDS,
+        "bbbb",
+        today=lambda: today,
+        schedule_path=tmp_path / "daily-words.json",
+    )
+    monkeypatch.setattr(main, "game", game)
+    monkeypatch.setattr(main, "ADMIN_TOKEN", "test-secret")
+    client = TestClient(main.app)
+    headers = {"X-Admin-Token": "test-secret"}
+    original = client.get(
+        "/admin/api/daily-words?days=7", headers=headers
+    ).json()[0]
+
+    response = client.post(
+        "/admin/api/daily-words/2026-07-20/blacklist",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["word"] != original["word"]
+    refreshed_words = client.get(
+        "/admin/api/daily-words?days=7", headers=headers
+    ).json()
+    assert original["word"] not in {item["word"] for item in refreshed_words}
+    rejected_entry = client.post("/game/entries", json={"word": original["word"]})
+    assert rejected_entry.status_code == 400
+    assert rejected_entry.json()["detail"] == "Dit woord staat op de zwarte lijst."
 
 
 def test_admin_can_rotate_verification_in_bulk(monkeypatch) -> None:

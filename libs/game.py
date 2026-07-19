@@ -7,6 +7,7 @@ from hashlib import sha256
 import json
 import logging
 from pathlib import Path
+import secrets
 from threading import RLock, Thread
 import unicodedata
 
@@ -19,6 +20,8 @@ from .word_filter import (
 from .word_ladder import reachable_words_with_steps, shortest_word_ladder
 
 logger = logging.getLogger(__name__)
+
+SELECTION_VERSION = 1
 
 
 class InvalidMoveError(ValueError):
@@ -56,6 +59,7 @@ class _UserState:
     date: Date
     start_word: str
     current_word: str
+    minimum_attempts: int
     entries: list[str] = field(default_factory=list)
     attempts: int = 0
     completed: bool = False
@@ -78,6 +82,7 @@ class DailyWordGame:
         words: list[str],
         target_word: str,
         *,
+        start_words: list[str] | None = None,
         minimum_steps: int = 3,
         maximum_steps: int = 5,
         today: Callable[[], Date] = Date.today,
@@ -91,15 +96,45 @@ class DailyWordGame:
         if not self.target_word:
             raise ValueError("target_word must contain letters")
 
-        self.words = select_four_letter_words(words, self.target_word)
+        self._minimum_steps = minimum_steps
+        self._maximum_steps = maximum_steps
+        self._all_words = select_four_letter_words(words, self.target_word)
+        self._start_words = set(
+            select_four_letter_words(
+                words if start_words is None else start_words,
+                self.target_word,
+            )
+        )
+        self._schedule_path = schedule_path
+        self._blacklist = self._load_blacklist()
+        self._rebuild_word_indexes()
+
+        self._today = today
+        self._user_states: dict[str, _UserState] = {}
+        self._lock = RLock()
+        self._word_assessor = word_assessor
+        self._schedule_dirty = False
+        (
+            self._scheduled_words,
+            self._played_words,
+            self._overridden_dates,
+            self._assessments,
+            self._assessment_warnings,
+        ) = self._load_schedule()
+        self._verification_thread: Thread | None = None
+
+    def _rebuild_word_indexes(self) -> None:
+        """Rebuild playable and start-word indexes without blacklisted words."""
+        self.words = [word for word in self._all_words if word not in self._blacklist]
         self._allowed_words = set(self.words)
         distances = reachable_words_with_steps(
-            self.words, self.target_word, maximum_steps
+            self.words, self.target_word, self._maximum_steps
         )
         eligible_words = [
             word
             for word, steps in distances.items()
-            if steps >= minimum_steps
+            if word in self._start_words
+            and steps >= self._minimum_steps
             and has_no_letters_in_same_position(word, self.target_word)
         ]
         if len(eligible_words) < 2:
@@ -110,20 +145,48 @@ class DailyWordGame:
             eligible_words,
             key=lambda word: sha256(f"{self.target_word}:{word}".encode()).digest(),
         )
-        self._today = today
-        self._user_states: dict[str, _UserState] = {}
-        self._lock = RLock()
-        self._schedule_path = schedule_path
-        self._word_assessor = word_assessor
-        (
-            self._scheduled_words,
-            self._played_words,
-            self._overridden_dates,
-            self._assessments,
-            self._assessment_warnings,
-        ) = self._load_schedule()
-        self._schedule_dirty = False
-        self._verification_thread: Thread | None = None
+
+    def blacklist_daily_word(self, day: Date) -> ScheduledWord:
+        """Blacklist a future scheduled word and replace affected schedule entries."""
+        if day <= self._today():
+            raise ValueError("Alleen toekomstige dagwoorden kunnen worden geblokkeerd.")
+
+        with self._lock:
+            self._archive_played_words()
+            word, _ = self._ensure_scheduled(day)
+            scheduled_words = self._scheduled_words.copy()
+            overridden_dates = self._overridden_dates.copy()
+            assessments = self._assessments.copy()
+            assessment_warnings = self._assessment_warnings.copy()
+
+            self._blacklist.add(word)
+            try:
+                self._rebuild_word_indexes()
+                invalid_dates = {
+                    scheduled_date
+                    for scheduled_date, scheduled_word in self._scheduled_words.items()
+                    if scheduled_word not in self._minimum_attempts
+                }
+                for scheduled_date in invalid_dates:
+                    del self._scheduled_words[scheduled_date]
+                    self._overridden_dates.discard(scheduled_date)
+
+                self._assessments.pop(word, None)
+                self._assessment_warnings.pop(word, None)
+                self._ensure_scheduled(day)
+            except ValueError:
+                self._blacklist.remove(word)
+                self._rebuild_word_indexes()
+                self._scheduled_words = scheduled_words
+                self._overridden_dates = overridden_dates
+                self._assessments = assessments
+                self._assessment_warnings = assessment_warnings
+                raise ValueError(
+                    "Dit woord kan niet worden geblokkeerd: er blijft geen geschikt dagwoord over."
+                ) from None
+
+            self._save_schedule()
+            return self._scheduled_word(day)
 
     def daily_start_word(self, day: Date | None = None) -> str:
         """Return the shared start word for a date."""
@@ -166,7 +229,7 @@ class DailyWordGame:
             return [self._scheduled_word(day) for day in scheduled_days]
 
     def rotate_daily_word(self, day: Date) -> ScheduledWord:
-        """Replace a future day's word with the next eligible candidate."""
+        """Replace a future day's word with a random eligible candidate."""
         if day <= self._today():
             raise ValueError("Alleen toekomstige dagwoorden kunnen worden gewisseld.")
 
@@ -178,23 +241,27 @@ class DailyWordGame:
 
             day_key = day.isoformat()
             current_word, _ = self._ensure_scheduled(day)
-            current_index = self._eligible_words.index(current_word)
             used_words = set(self._played_words.values()) | {
                 word
                 for scheduled_date, word in self._scheduled_words.items()
                 if scheduled_date != day_key
             }
-            for offset in range(1, len(self._eligible_words)):
-                candidate_index = (current_index + offset) % len(self._eligible_words)
-                candidate = self._eligible_words[candidate_index]
-                if (
-                    candidate not in used_words
-                    and self._assessments.get(candidate) is not False
-                ):
-                    self._scheduled_words[day_key] = candidate
-                    self._overridden_dates.add(day_key)
-                    self._save_schedule()
-                    return self._scheduled_word(day)
+            candidates = [
+                candidate
+                for candidate in self._eligible_words
+                if candidate != current_word
+                and candidate not in used_words
+                and self._assessments.get(candidate) is not False
+            ]
+            if candidates:
+                total_weight = sum(self._minimum_attempts[word] for word in candidates)
+                self._scheduled_words[day_key] = self._weighted_candidate(
+                    candidates,
+                    secrets.randbelow(total_weight),
+                )
+                self._overridden_dates.add(day_key)
+                self._save_schedule()
+                return self._scheduled_word(day)
 
         raise ValueError("Er is geen ongebruikt alternatief dagwoord beschikbaar.")
 
@@ -277,6 +344,8 @@ class DailyWordGame:
                 raise GameAlreadyCompletedError(
                     "Je hebt het doel van vandaag al bereikt."
                 )
+            if normalized_word in self._blacklist:
+                raise InvalidMoveError("Dit woord staat op de zwarte lijst.")
             if normalized_word not in self._allowed_words | {self.target_word}:
                 raise InvalidMoveError(
                     "Dit woord staat niet in de toegestane woordenlijst."
@@ -326,7 +395,12 @@ class DailyWordGame:
         user_state = self._user_states.get(user_id)
         if user_state is None or user_state.date != today:
             start_word = self.daily_start_word(today)
-            user_state = _UserState(today, start_word, start_word)
+            user_state = _UserState(
+                today,
+                start_word,
+                start_word,
+                self._minimum_attempts[start_word],
+            )
             self._user_states[user_id] = user_state
         return user_state
 
@@ -357,16 +431,30 @@ class DailyWordGame:
         used_words = set(self._played_words.values()) | set(
             self._scheduled_words.values()
         )
-        start_index = day.toordinal() % len(self._eligible_words)
-        for offset in range(len(self._eligible_words)):
-            candidate_index = (start_index + offset) % len(self._eligible_words)
-            candidate = self._eligible_words[candidate_index]
-            if (
-                candidate not in used_words
-                and self._assessments.get(candidate) is not False
-            ):
+        candidates = [
+            candidate
+            for candidate in self._eligible_words
+            if candidate not in used_words
+            and self._assessments.get(candidate) is not False
+        ]
+        if not candidates:
+            raise ValueError("Alle geschikte dagwoorden zijn al gebruikt of ingepland.")
+
+        total_weight = sum(self._minimum_attempts[word] for word in candidates)
+        digest = sha256(
+            f"{self.target_word}:{day.isoformat()}:schedule".encode()
+        ).digest()
+        ticket = int.from_bytes(digest, "big") % total_weight
+        return self._weighted_candidate(candidates, ticket)
+
+    def _weighted_candidate(self, candidates: list[str], ticket: int) -> str:
+        """Select a candidate from a zero-based weighted ticket."""
+        for candidate in candidates:
+            weight = self._minimum_attempts[candidate]
+            if ticket < weight:
                 return candidate
-        raise ValueError("Alle geschikte dagwoorden zijn al gebruikt of ingepland.")
+            ticket -= weight
+        raise ValueError("weighted ticket is outside the candidate range")
 
     def _verify_words_safely(self, days: int) -> None:
         try:
@@ -410,6 +498,7 @@ class DailyWordGame:
             assessments_source: object = {}
             warnings_source: object = {}
             stored_assessment_version: object = None
+            stored_selection_version: object = None
         else:
             scheduled_source = stored_schedule.get("scheduled", {})
             played_source = stored_schedule.get("played", {})
@@ -417,13 +506,22 @@ class DailyWordGame:
             assessments_source = stored_schedule.get("assessments", {})
             warnings_source = stored_schedule.get("assessment_warnings", {})
             stored_assessment_version = stored_schedule.get("assessment_version")
+            stored_selection_version = stored_schedule.get("selection_version")
+
+        if stored_selection_version != SELECTION_VERSION:
+            scheduled_source = {}
+            overridden_source = []
+            self._schedule_dirty = True
 
         if stored_assessment_version != ASSESSMENT_VERSION:
             assessments_source = {}
             warnings_source = {}
 
         scheduled_words = self._valid_word_mapping(scheduled_source)
-        played_words = self._valid_word_mapping(played_source)
+        played_words = self._valid_word_mapping(
+            played_source,
+            allowed_words=set(self._all_words),
+        )
         played_values = set(played_words.values())
         scheduled_words = {
             day: word
@@ -444,7 +542,7 @@ class DailyWordGame:
                 word: assessment
                 for word, assessment in assessments_source.items()
                 if isinstance(word, str)
-                and word in self._minimum_attempts
+                and word in self._all_words
                 and (isinstance(assessment, bool) or assessment is None)
             }
             if isinstance(assessments_source, dict)
@@ -455,7 +553,7 @@ class DailyWordGame:
                 word: warning
                 for word, warning in warnings_source.items()
                 if isinstance(word, str)
-                and word in self._minimum_attempts
+                and word in self._all_words
                 and isinstance(warning, str)
             }
             if isinstance(warnings_source, dict)
@@ -469,10 +567,41 @@ class DailyWordGame:
             assessment_warnings,
         )
 
-    def _valid_word_mapping(self, source: object) -> dict[str, str]:
+    def _load_blacklist(self) -> set[str]:
+        if self._schedule_path is None or not self._schedule_path.exists():
+            return set()
+        try:
+            stored_schedule = json.loads(
+                self._schedule_path.read_text(encoding="utf-8")
+            )
+        except OSError, json.JSONDecodeError:
+            return set()
+        if not isinstance(stored_schedule, dict):
+            return set()
+        source = stored_schedule.get("blacklist", [])
+        if not isinstance(source, list):
+            return set()
+        allowed_words = set(self._all_words)
+        return {
+            normalized_word
+            for word in source
+            if isinstance(word, str)
+            and (normalized_word := _normalize_word(word)) in allowed_words
+            and normalized_word != self.target_word
+        }
+
+    def _valid_word_mapping(
+        self,
+        source: object,
+        *,
+        allowed_words: set[str] | None = None,
+    ) -> dict[str, str]:
         if not isinstance(source, dict):
             return {}
 
+        valid_words = (
+            set(self._minimum_attempts) if allowed_words is None else allowed_words
+        )
         valid_mapping: dict[str, str] = {}
         used_words: set[str] = set()
         for day, word in sorted(source.items()):
@@ -482,7 +611,7 @@ class DailyWordGame:
                 continue
             if (
                 isinstance(word, str)
-                and word in self._minimum_attempts
+                and word in valid_words
                 and word not in used_words
             ):
                 valid_mapping[day] = word
@@ -505,6 +634,8 @@ class DailyWordGame:
                     "assessments": self._assessments,
                     "assessment_warnings": self._assessment_warnings,
                     "assessment_version": ASSESSMENT_VERSION,
+                    "blacklist": sorted(self._blacklist),
+                    "selection_version": SELECTION_VERSION,
                 },
                 indent=2,
                 sort_keys=True,
@@ -524,7 +655,7 @@ class DailyWordGame:
             entries=tuple(word.upper() for word in state.entries),
             attempts=state.attempts,
             minimum_attempts=(
-                self._minimum_attempts[state.start_word] if state.completed else None
+                state.minimum_attempts if state.completed else None
             ),
             completed=state.completed,
         )

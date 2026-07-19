@@ -180,7 +180,7 @@ button {
 
 .word-item {
   display: grid;
-  grid-template-columns: 155px 1fr 110px 90px;
+  grid-template-columns: 155px 1fr 110px 92px;
   align-items: center;
   gap: 14px;
   padding: 13px 14px;
@@ -202,6 +202,10 @@ button {
 .minimum {
   color: var(--muted);
   font-size: .7rem;
+}
+
+.minimum {
+  display: block;
 }
 
 .word-tiles {
@@ -267,12 +271,23 @@ button {
   line-height: 1.3;
 }
 
-.rotate-button {
+.rotate-button,
+.blacklist-button {
   height: 38px;
   padding: 0 11px;
 }
 
-.rotate-button:disabled {
+.blacklist-button {
+  background: var(--red);
+}
+
+.word-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.rotate-button:disabled,
+.blacklist-button:disabled {
   cursor: wait;
   opacity: .55;
 }
@@ -298,7 +313,7 @@ button {
     grid-column: 1;
   }
 
-  .rotate-button {
+  .word-actions {
     grid-column: 2;
     grid-row: 1 / span 3;
   }
