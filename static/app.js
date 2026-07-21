@@ -496,6 +496,22 @@ function buildKeyboard() {
   });
 }
 
+function randomizeDialogCloseIcons() {
+  const directions = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
+  document.querySelectorAll(".dialog-close span").forEach((icon) => {
+    const magnitude = Math.floor(Math.random() * 2) + 1;
+    const [horizontal, vertical] = directions[Math.floor(Math.random() * directions.length)];
+    icon.style.setProperty("--close-random-x", `${horizontal * magnitude}px`);
+    icon.style.setProperty("--close-random-y", `${vertical * magnitude}px`);
+  });
+}
+
 function handleKey(key) {
   if (key === "ENTER") {
     elements.form.requestSubmit();
@@ -530,6 +546,7 @@ elements.statisticsDialog.addEventListener("click", (event) => {
   if (event.target === elements.statisticsDialog) elements.statisticsDialog.close();
 });
 
+randomizeDialogCloseIcons();
 buildKeyboard();
 updateCountdown();
 window.setInterval(updateCountdown, 1000);

@@ -571,6 +571,14 @@ dialog::backdrop {
   font-size: 1.35rem;
 }
 
+.dialog-close span {
+  display: inline-block;
+  transform: translate(
+    var(--close-random-x, 0px),
+    calc(-2px + var(--close-random-y, 0px))
+  );
+}
+
 dialog ol {
   padding-left: 22px;
   color: var(--muted);
