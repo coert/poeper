@@ -392,6 +392,53 @@ def test_warning_assessments_are_retried_on_later_verification_passes() -> None:
     assert second_pass.warning is None
 
 
+def test_warning_assessment_can_be_retried_for_one_scheduled_day() -> None:
+    calls: list[str] = []
+
+    def assess(word: str) -> CommonWordAssessment:
+        calls.append(word)
+        if len(calls) == 1:
+            return CommonWordAssessment(
+                common=None,
+                reason="Geen beoordeling.",
+                warning="Taalmodel niet bereikbaar; woord zonder controle ingepland.",
+            )
+        return CommonWordAssessment(common=True, reason="Gangbaar woord.")
+
+    today = date(2026, 7, 19)
+    scheduled_day = date(2026, 7, 20)
+    game = DailyWordGame(
+        TEST_WORDS,
+        "bbbb",
+        today=lambda: today,
+        word_assessor=assess,
+    )
+    game.upcoming_words(1)
+    game.verify_upcoming_words(1)
+
+    retried = game.retry_daily_word_verification(scheduled_day)
+
+    assert len(calls) == 2
+    assert retried.date == scheduled_day
+    assert retried.common is True
+    assert retried.warning is None
+
+
+def test_verification_retry_requires_a_warning() -> None:
+    today = date(2026, 7, 19)
+    scheduled_day = date(2026, 7, 20)
+    game = DailyWordGame(
+        TEST_WORDS,
+        "bbbb",
+        today=lambda: today,
+        word_assessor=lambda word: CommonWordAssessment(True, "Gangbaar woord."),
+    )
+    game.upcoming_words(1)
+
+    with pytest.raises(ValueError, match="geen verificatiewaarschuwing"):
+        game.retry_daily_word_verification(scheduled_day)
+
+
 def test_word_verification_runs_in_a_daemon_thread() -> None:
     assessment_started = Event()
     allow_assessment_to_finish = Event()

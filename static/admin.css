@@ -82,11 +82,16 @@ main {
 }
 
 .login-card,
-.schedule {
+.schedule,
+.performance {
   padding: clamp(22px, 5vw, 36px);
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgb(255 255 255 / 55%);
+}
+
+.performance {
+  margin-top: 22px;
 }
 
 .login-card {
@@ -95,10 +100,62 @@ main {
 }
 
 .login-card > p:not(.eyebrow, .message),
-.schedule-note {
+.schedule-note,
+.performance-note,
+.performance-empty {
   color: var(--muted);
   font-size: .86rem;
   line-height: 1.5;
+}
+
+.performance-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--white);
+}
+
+.performance-table {
+  width: 100%;
+  min-width: 610px;
+  border-collapse: collapse;
+  font-size: .78rem;
+}
+
+.performance-table th,
+.performance-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.performance-table th:first-child,
+.performance-table td:first-child {
+  text-align: left;
+}
+
+.performance-table thead th {
+  color: var(--muted);
+  font-size: .68rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.performance-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.performance-table tbody th strong,
+.performance-table tbody th span {
+  display: block;
+}
+
+.performance-table tbody th span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 500;
 }
 
 form label {
@@ -176,6 +233,29 @@ button {
 .word-list {
   display: grid;
   gap: 8px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 750;
+}
+
+.pagination-button {
+  min-width: 82px;
+  height: 36px;
+  padding: 0 12px;
+  background: var(--ink);
+}
+
+.pagination-button:disabled {
+  cursor: default;
+  opacity: .35;
 }
 
 .word-item {
@@ -272,7 +352,8 @@ button {
 }
 
 .rotate-button,
-.blacklist-button {
+.blacklist-button,
+.verify-button {
   height: 38px;
   padding: 0 11px;
 }
@@ -281,13 +362,19 @@ button {
   background: var(--red);
 }
 
+.verify-button {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
 .word-actions {
   display: grid;
   gap: 6px;
 }
 
 .rotate-button:disabled,
-.blacklist-button:disabled {
+.blacklist-button:disabled,
+.verify-button:disabled {
   cursor: wait;
   opacity: .55;
 }
@@ -337,5 +424,10 @@ button {
     width: 100%;
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .pagination {
+    justify-content: space-between;
+    gap: 8px;
   }
 }

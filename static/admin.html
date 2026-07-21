@@ -40,11 +40,12 @@
         </div>
         <div class="schedule-actions">
           <label class="days-control">
-            Toon
-            <select id="days-select">
-              <option value="7">7 dagen</option>
+            Per pagina
+            <select id="schedule-page-size">
+              <option value="7" selected>7 dagen</option>
               <option value="14">14 dagen</option>
-              <option value="30" selected>30 dagen</option>
+              <option value="21">21 dagen</option>
+              <option value="28">28 dagen</option>
             </select>
           </label>
           <button id="rotate-verification-button" type="button" class="rotate-button">
@@ -60,6 +61,56 @@
       </p>
       <p class="message" id="schedule-message" role="alert"></p>
       <div class="word-list" id="word-list" aria-live="polite"></div>
+      <nav class="pagination" id="schedule-pagination" aria-label="Pagina's met komende dagwoorden">
+        <button type="button" class="pagination-button" id="schedule-previous">Vorige</button>
+        <span id="schedule-page-info" aria-live="polite"></span>
+        <button type="button" class="pagination-button" id="schedule-next">Volgende</button>
+      </nav>
+    </section>
+
+    <section class="performance" id="performance" hidden>
+      <div class="schedule-heading">
+        <div>
+          <p class="eyebrow">Historie</p>
+          <h2>Resultaten uit het verleden</h2>
+        </div>
+        <label class="days-control">
+          Per pagina
+          <select id="performance-page-size">
+            <option value="7" selected>7 dagen</option>
+            <option value="14">14 dagen</option>
+            <option value="21">21 dagen</option>
+            <option value="28">28 dagen</option>
+          </select>
+        </label>
+      </div>
+      <p class="performance-note">
+        Een speler telt mee vanaf de eerste geldige zet. Gemiddelden zijn
+        berekend over spelers die de ladder hebben opgelost.
+      </p>
+      <p class="message" id="performance-message" role="alert"></p>
+      <p class="performance-empty" id="performance-empty" hidden>
+        Er zijn nog geen resultaten van eerdere dagen vastgelegd.
+      </p>
+      <div class="performance-table-wrap" id="performance-table-wrap" hidden>
+        <table class="performance-table">
+          <thead>
+            <tr>
+              <th scope="col">Datum</th>
+              <th scope="col">Spelers</th>
+              <th scope="col">Opgelost</th>
+              <th scope="col">Gem. zetten</th>
+              <th scope="col">Gem. boven par</th>
+            </tr>
+          </thead>
+          <tbody id="performance-body"></tbody>
+        </table>
+      </div>
+      <nav class="pagination" id="performance-pagination" aria-label="Pagina's met historische resultaten" hidden>
+        <button type="button" class="pagination-button" id="performance-previous">Vorige</button>
+        <span id="performance-page-info" aria-live="polite"></span>
+        <button type="button" class="pagination-button" id="performance-next">Volgende</button>
+      </nav>
     </section>
   </main>
 </body>

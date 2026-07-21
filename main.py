@@ -20,6 +20,7 @@ WORD_LIST_PATH = Path(__file__).parent / "assets" / "wordlist.txt"
 START_WORD_LIST_PATH = Path(__file__).parent / "assets" / "basiswoorden.txt"
 STATIC_PATH = Path(__file__).parent / "static"
 SCHEDULE_PATH = Path(__file__).parent / "data" / "daily-words.json"
+PERFORMANCE_PATH = Path(__file__).parent / "data" / "performance.sqlite3"
 ADMIN_TOKEN = os.environ.get("POEPER_ADMIN_TOKEN")
 ROOT_PATH = os.environ.get("POEPER_ROOT_PATH", "")
 USER_COOKIE_NAME = "word_ladder_user_id"
@@ -97,6 +98,14 @@ class RotateVerificationResponse(BaseModel):
     verification_completed: bool
 
 
+class DailyPerformanceResponse(BaseModel):
+    date: date
+    players: int
+    solved: int
+    average_steps: float | None
+    average_above_par: float | None
+
+
 word_list = WORD_LIST_PATH.read_text(encoding="utf-8").splitlines()
 start_word_list = START_WORD_LIST_PATH.read_text(encoding="utf-8").splitlines()
 game = DailyWordGame(
@@ -106,6 +115,7 @@ game = DailyWordGame(
     maximum_steps=8,
     today=game_date_at,
     schedule_path=SCHEDULE_PATH,
+    performance_path=PERFORMANCE_PATH,
     word_assessor=assess_common_dutch_word,
 )
 
@@ -154,6 +164,16 @@ def list_daily_words(
     return schedule
 
 
+@app.get(
+    "/admin/api/performance",
+    response_model=list[DailyPerformanceResponse],
+)
+def list_performance(x_admin_token: str | None = Header(None)):
+    """List aggregated results for all recorded days before today."""
+    require_admin_token(x_admin_token)
+    return game.performance_results()
+
+
 @app.post(
     "/admin/api/daily-words/{scheduled_date}/rotate",
     response_model=ScheduledWordResponse,
@@ -186,6 +206,22 @@ def blacklist_daily_word(
         scheduled_word = game.blacklist_daily_word(scheduled_date)
         game.start_word_verification(30)
         return scheduled_word
+    except ValueError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
+
+
+@app.post(
+    "/admin/api/daily-words/{scheduled_date}/verify",
+    response_model=ScheduledWordResponse,
+)
+def retry_daily_word_verification(
+    scheduled_date: date,
+    x_admin_token: str | None = Header(None),
+):
+    """Retry verification for one future word with a warning."""
+    require_admin_token(x_admin_token)
+    try:
+        return game.retry_daily_word_verification(scheduled_date)
     except ValueError as error:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 

@@ -65,6 +65,12 @@ played words so they cannot be scheduled again. The upcoming 30-day schedule
 contains no duplicates, including after manual rotations. The token is
 retained only in the browser tab's session storage.
 
+The dashboard also lists performance for all recorded days before today. A
+player is counted after their first valid move; solver averages include both
+total steps and steps above the shortest route. Results are stored in
+`data/performance.sqlite3`. Only a date-scoped hash of the anonymous player ID
+is retained, so activity cannot be linked across puzzle dates.
+
 Future words are checked with the OpenAI-compatible vLLM server at
 `http://spark-0240:8000`. Words classified as uncommon are skipped and the
 next unused candidate is checked. Verification runs asynchronously in a
@@ -72,7 +78,9 @@ daemon thread, so the admin page loads immediately and server shutdown is not
 held up by an active model request. The page polls while words display
 `Wordt geverifieerd…`. Results are cached in the schedule file. If the model
 is unavailable, the candidate remains scheduled and the admin page displays
-a warning instead of failing schedule generation.
+a warning instead of failing schedule generation. Use the `Herverifieer`
+button beside a warned word to retry that date without rechecking the full
+schedule.
 
 The model connection can be changed with `POEPER_VLLM_URL` and
 `POEPER_VLLM_MODEL`. Schedule generation is limited to 30 future days.
@@ -122,7 +130,7 @@ docker compose up -d --build
 ```
 
 This maps container port `8000` to `127.0.0.1:18000` and persists scheduling
-state in `./data`.
+and performance state in `./data`.
 
 3. Add Apache reverse proxy rules in
 `/etc/apache2/sites-available/000-default-le-ssl.conf`:

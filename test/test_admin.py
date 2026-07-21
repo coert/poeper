@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 import main
 from libs.common_word import CommonWordAssessment
 from libs.game import DailyWordGame
-from test.test_game import TEST_WORDS
+from test.test_game import TEST_WORDS, ladder_moves
 
 
 def test_admin_page_is_served() -> None:
@@ -16,6 +16,8 @@ def test_admin_page_is_served() -> None:
     assert page.status_code == 200
     assert "Komende dagwoorden" in page.text
     assert "Roteer verificatie" in page.text
+    assert "Resultaten uit het verleden" in page.text
+    assert "Gem. boven par" in page.text
     assert client.get("/static/admin.css").status_code == 200
     script = client.get("/static/admin.js")
     assert script.status_code == 200
@@ -25,7 +27,26 @@ def test_admin_page_is_served() -> None:
     assert "rotate-verification" in script.text
     assert "Blokkeer" in script.text
     assert "/blacklist" in script.text
+    assert "Herverifieer" in script.text
+    assert "/verify" in script.text
     assert "setTimeout(loadSchedule, 2000)" in script.text
+    assert "renderPerformance" in script.text
+    assert 'adminApiUrl("/performance")' in script.text
+    assert "Er zijn nog geen resultaten" in page.text
+    assert 'id="schedule-page-size"' in page.text
+    assert 'id="performance-page-size"' in page.text
+    assert page.text.count('<option value="7" selected>7 dagen</option>') == 2
+    assert page.text.count('<option value="14">14 dagen</option>') == 2
+    assert page.text.count('<option value="21">21 dagen</option>') == 2
+    assert page.text.count('<option value="28">28 dagen</option>') == 2
+    assert 'id="schedule-previous"' in page.text
+    assert 'id="schedule-next"' in page.text
+    assert 'id="performance-previous"' in page.text
+    assert 'id="performance-next"' in page.text
+    assert "function updatePagination" in script.text
+    assert "function renderSchedulePage" in script.text
+    assert "function renderPerformancePage" in script.text
+    assert 'adminApiUrl("/daily-words?days=30")' in script.text
 
 
 def test_admin_api_requires_the_configured_token(monkeypatch) -> None:
@@ -36,6 +57,41 @@ def test_admin_api_requires_the_configured_token(monkeypatch) -> None:
 
     assert response.status_code == 401
     assert response.json()["detail"] == "De beheersleutel is ongeldig."
+
+    performance_response = client.get("/admin/api/performance")
+    assert performance_response.status_code == 401
+
+
+def test_admin_can_list_past_performance(monkeypatch, tmp_path) -> None:
+    today = date(2026, 7, 20)
+    played_day = date(2026, 7, 19)
+    game = DailyWordGame(
+        TEST_WORDS,
+        "bbbb",
+        today=lambda: today,
+        performance_path=tmp_path / "performance.sqlite3",
+    )
+    state = game.get_state("player", played_day)
+    for move in [*ladder_moves(state.start_word), "bbbb"]:
+        game.submit_word("player", move, played_day)
+    monkeypatch.setattr(main, "game", game)
+    monkeypatch.setattr(main, "ADMIN_TOKEN", "test-secret")
+
+    response = TestClient(main.app).get(
+        "/admin/api/performance",
+        headers={"X-Admin-Token": "test-secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "date": "2026-07-19",
+            "players": 1,
+            "solved": 1,
+            "average_steps": 4.0,
+            "average_above_par": 0.0,
+        }
+    ]
 
 
 def test_admin_can_list_and_rotate_future_words(monkeypatch) -> None:
@@ -156,3 +212,41 @@ def test_admin_can_rotate_verification_in_bulk(monkeypatch) -> None:
     assert after.status_code == 200
     after_words = [item["word"] for item in after.json()]
     assert before_words != after_words
+
+
+def test_admin_can_retry_one_failed_verification(monkeypatch) -> None:
+    today = date(2026, 7, 19)
+    scheduled_day = date(2026, 7, 20)
+    calls = 0
+
+    def assess(word: str) -> CommonWordAssessment:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return CommonWordAssessment(
+                common=None,
+                reason="Geen beoordeling.",
+                warning="Taalmodel niet bereikbaar; woord zonder controle ingepland.",
+            )
+        return CommonWordAssessment(common=True, reason="Gangbaar woord.")
+
+    game = DailyWordGame(
+        TEST_WORDS,
+        "bbbb",
+        today=lambda: today,
+        word_assessor=assess,
+    )
+    game.upcoming_words(1)
+    game.verify_upcoming_words(1)
+    monkeypatch.setattr(main, "game", game)
+    monkeypatch.setattr(main, "ADMIN_TOKEN", "test-secret")
+
+    response = TestClient(main.app).post(
+        f"/admin/api/daily-words/{scheduled_day.isoformat()}/verify",
+        headers={"X-Admin-Token": "test-secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["common"] is True
+    assert response.json()["warning"] is None
+    assert calls == 2

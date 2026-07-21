@@ -8,10 +8,12 @@ import json
 import logging
 from pathlib import Path
 import secrets
+import sqlite3
 from threading import RLock, Thread
 import unicodedata
 
 from .common_word import ASSESSMENT_VERSION, CommonWordAssessment
+from .performance import DailyPerformance, PerformanceStore
 from .word_filter import (
     has_no_letters_in_same_position,
     is_one_character_different,
@@ -87,6 +89,7 @@ class DailyWordGame:
         maximum_steps: int = 5,
         today: Callable[[], Date] = Date.today,
         schedule_path: Path | None = None,
+        performance_path: Path | None = None,
         word_assessor: Callable[[str], CommonWordAssessment] | None = None,
     ) -> None:
         if minimum_steps < 1 or maximum_steps < minimum_steps:
@@ -106,6 +109,9 @@ class DailyWordGame:
             )
         )
         self._schedule_path = schedule_path
+        self._performance_store = (
+            PerformanceStore(performance_path) if performance_path is not None else None
+        )
         self._blacklist = self._load_blacklist()
         self._rebuild_word_indexes()
 
@@ -296,33 +302,58 @@ class DailyWordGame:
 
         first_day = self._today() + timedelta(days=1)
         for offset in range(days):
-            day = first_day + timedelta(days=offset)
+            self._verify_day(first_day + timedelta(days=offset))
+
+    def retry_daily_word_verification(self, day: Date) -> ScheduledWord:
+        """Retry a failed verification for one scheduled future day."""
+        if day <= self._today():
+            raise ValueError("Alleen toekomstige dagwoorden kunnen worden geverifieerd.")
+        if self._word_assessor is None:
+            raise ValueError("Er is geen woordverificatie geconfigureerd.")
+
+        with self._lock:
+            self._archive_played_words()
             day_key = day.isoformat()
-            while True:
-                with self._lock:
-                    word, schedule_changed = self._ensure_scheduled(day)
-                    if schedule_changed:
-                        self._save_schedule()
-                    stored_assessment = self._assessments.get(word)
-                    if stored_assessment is not None:
-                        break
-                    self._assessment_warnings.pop(word, None)
+            word = self._scheduled_words.get(day_key)
+            if word is None:
+                raise ValueError("Voor deze datum staat geen dagwoord ingepland.")
+            if word not in self._assessment_warnings:
+                raise ValueError("Dit dagwoord heeft geen verificatiewaarschuwing.")
 
-                assessment = self._word_assessor(word)
+        self._verify_day(day)
+        return self._scheduled_word(day)
 
-                with self._lock:
-                    if self._scheduled_words.get(day_key) != word:
-                        continue
-                    self._assessments[word] = assessment.common
-                    if assessment.warning is not None:
-                        self._assessment_warnings[word] = assessment.warning
-                    else:
-                        self._assessment_warnings.pop(word, None)
-                    if assessment.common is False:
-                        del self._scheduled_words[day_key]
+    def _verify_day(self, day: Date) -> None:
+        """Verify one date, replacing rejected words until one can remain."""
+        if self._word_assessor is None:
+            return
+
+        day_key = day.isoformat()
+        while True:
+            with self._lock:
+                word, schedule_changed = self._ensure_scheduled(day)
+                if schedule_changed:
                     self._save_schedule()
-                    if assessment.common is not False:
-                        break
+                stored_assessment = self._assessments.get(word)
+                if stored_assessment is not None:
+                    break
+                self._assessment_warnings.pop(word, None)
+
+            assessment = self._word_assessor(word)
+
+            with self._lock:
+                if self._scheduled_words.get(day_key) != word:
+                    continue
+                self._assessments[word] = assessment.common
+                if assessment.warning is not None:
+                    self._assessment_warnings[word] = assessment.warning
+                else:
+                    self._assessment_warnings.pop(word, None)
+                if assessment.common is False:
+                    del self._scheduled_words[day_key]
+                self._save_schedule()
+                if assessment.common is not False:
+                    break
 
     def get_state(self, user_id: str, day: Date | None = None) -> GameState:
         """Return a user's state, creating or resetting the requested game."""
@@ -361,7 +392,25 @@ class DailyWordGame:
             user_state.entries.append(normalized_word)
             user_state.attempts += 1
             user_state.completed = normalized_word == self.target_word
-            return self._snapshot(user_state)
+            snapshot = self._snapshot(user_state)
+            if self._performance_store is not None:
+                try:
+                    self._performance_store.record(
+                        user_state.date,
+                        user_id.strip(),
+                        user_state.attempts,
+                        user_state.minimum_attempts,
+                        user_state.completed,
+                    )
+                except (OSError, sqlite3.Error):
+                    logger.exception("Opslaan van spelprestaties is mislukt.")
+            return snapshot
+
+    def performance_results(self) -> list[DailyPerformance]:
+        """Return performance aggregates for recorded days before today."""
+        if self._performance_store is None:
+            return []
+        return self._performance_store.results_before(self._today())
 
     def complete_with_shortest_route(
         self, user_id: str, day: Date | None = None

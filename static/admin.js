@@ -6,14 +6,30 @@ const elements = {
   loginMessage: document.querySelector("#login-message"),
   schedule: document.querySelector("#schedule"),
   scheduleMessage: document.querySelector("#schedule-message"),
-  daysSelect: document.querySelector("#days-select"),
+  schedulePageSize: document.querySelector("#schedule-page-size"),
+  schedulePagination: document.querySelector("#schedule-pagination"),
+  schedulePrevious: document.querySelector("#schedule-previous"),
+  scheduleNext: document.querySelector("#schedule-next"),
+  schedulePageInfo: document.querySelector("#schedule-page-info"),
   rotateVerificationButton: document.querySelector("#rotate-verification-button"),
   wordList: document.querySelector("#word-list"),
+  performance: document.querySelector("#performance"),
+  performanceMessage: document.querySelector("#performance-message"),
+  performanceEmpty: document.querySelector("#performance-empty"),
+  performanceTableWrap: document.querySelector("#performance-table-wrap"),
+  performanceBody: document.querySelector("#performance-body"),
+  performancePageSize: document.querySelector("#performance-page-size"),
+  performancePagination: document.querySelector("#performance-pagination"),
+  performancePrevious: document.querySelector("#performance-previous"),
+  performanceNext: document.querySelector("#performance-next"),
+  performancePageInfo: document.querySelector("#performance-page-info"),
 };
 
 const TOKEN_KEY = "poeper-admin-token";
 let adminToken = sessionStorage.getItem(TOKEN_KEY) || "";
 let pollTimer = null;
+const scheduleState = { items: [], page: 1, pageSize: 7 };
+const performanceState = { items: [], page: 1, pageSize: 7 };
 
 function adminApiUrl(path) {
   const basePath = window.location.pathname.replace(/\/admin\/?$/, "");
@@ -123,11 +139,117 @@ function renderWords(words) {
     const actions = document.createElement("div");
     actions.className = "word-actions";
     actions.append(rotateButton, blacklistButton);
+    if (item.warning) {
+      const verifyButton = document.createElement("button");
+      verifyButton.className = "verify-button";
+      verifyButton.type = "button";
+      verifyButton.textContent = "Herverifieer";
+      verifyButton.addEventListener("click", () => retryVerification(
+        item.date,
+        item.word,
+        verifyButton,
+      ));
+      actions.prepend(verifyButton);
+    }
 
     row.append(dateBlock, word, details, actions);
     elements.wordList.append(row);
   });
-  return words.some((item) => item.common === null && !item.warning);
+}
+
+function updatePagination(state, paginationElements) {
+  const totalPages = Math.max(1, Math.ceil(state.items.length / state.pageSize));
+  state.page = Math.min(Math.max(1, state.page), totalPages);
+  paginationElements.info.textContent = `Pagina ${state.page} van ${totalPages}`;
+  paginationElements.previous.disabled = state.page === 1;
+  paginationElements.next.disabled = state.page === totalPages;
+}
+
+function pageItems(state) {
+  const start = (state.page - 1) * state.pageSize;
+  return state.items.slice(start, start + state.pageSize);
+}
+
+function renderSchedulePage() {
+  updatePagination(scheduleState, {
+    previous: elements.schedulePrevious,
+    next: elements.scheduleNext,
+    info: elements.schedulePageInfo,
+  });
+  renderWords(pageItems(scheduleState));
+}
+
+function formatAverage(value, { abovePar = false } = {}) {
+  if (value === null) return "—";
+  const formatted = value.toLocaleString("nl-NL", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  return abovePar ? `+${formatted}` : formatted;
+}
+
+function renderPerformancePage() {
+  updatePagination(performanceState, {
+    previous: elements.performancePrevious,
+    next: elements.performanceNext,
+    info: elements.performancePageInfo,
+  });
+  const results = pageItems(performanceState);
+  elements.performanceBody.replaceChildren();
+  elements.performanceEmpty.hidden = performanceState.items.length > 0;
+  elements.performanceTableWrap.hidden = performanceState.items.length === 0;
+  elements.performancePagination.hidden = performanceState.items.length === 0;
+
+  results.forEach((item) => {
+    const formattedDate = formatDate(item.date);
+    const row = document.createElement("tr");
+    const dateCell = document.createElement("th");
+    dateCell.scope = "row";
+    dateCell.innerHTML = `<strong>${formattedDate.weekday}</strong><span>${formattedDate.date}</span>`;
+
+    const players = document.createElement("td");
+    players.textContent = item.players.toLocaleString("nl-NL");
+    const solved = document.createElement("td");
+    solved.textContent = item.solved.toLocaleString("nl-NL");
+    const averageSteps = document.createElement("td");
+    averageSteps.textContent = formatAverage(item.average_steps);
+    const averageAbovePar = document.createElement("td");
+    averageAbovePar.textContent = formatAverage(
+      item.average_above_par,
+      { abovePar: true },
+    );
+
+    row.append(dateCell, players, solved, averageSteps, averageAbovePar);
+    elements.performanceBody.append(row);
+  });
+}
+
+function showLoginError(error) {
+  sessionStorage.removeItem(TOKEN_KEY);
+  adminToken = "";
+  elements.loginCard.hidden = false;
+  elements.schedule.hidden = true;
+  elements.performance.hidden = true;
+  elements.loginMessage.textContent = error.message;
+}
+
+async function loadPerformance() {
+  elements.performanceMessage.textContent = "Laden…";
+  try {
+    const results = await adminRequest(adminApiUrl("/performance"));
+    performanceState.items = results;
+    renderPerformancePage();
+    elements.loginCard.hidden = true;
+    elements.performance.hidden = false;
+    elements.performanceMessage.textContent = "";
+  } catch (error) {
+    if (error.status === 401 || error.status === 503) {
+      showLoginError(error);
+    } else {
+      elements.performance.hidden = false;
+      elements.performanceMessage.textContent = error.message;
+    }
+  }
 }
 
 async function blacklistWord(date, word, button) {
@@ -149,13 +271,36 @@ async function blacklistWord(date, word, button) {
   }
 }
 
+async function retryVerification(date, word, button) {
+  button.disabled = true;
+  button.textContent = "Bezig…";
+  elements.scheduleMessage.textContent = "";
+  try {
+    const result = await adminRequest(adminApiUrl(`/daily-words/${date}/verify`), {
+      method: "POST",
+    });
+    await loadSchedule();
+    elements.scheduleMessage.textContent = result.warning
+      ? `Herverificatie van ${word} is niet gelukt.`
+      : `${word} is opnieuw geverifieerd.`;
+  } catch (error) {
+    elements.scheduleMessage.textContent = error.message;
+    button.disabled = false;
+    button.textContent = "Herverifieer";
+  }
+}
+
 async function loadSchedule() {
   elements.scheduleMessage.textContent = "Laden…";
   try {
     const words = await adminRequest(
-      adminApiUrl(`/daily-words?days=${elements.daysSelect.value}`),
+      adminApiUrl("/daily-words?days=30"),
     );
-    const verificationPending = renderWords(words);
+    scheduleState.items = words;
+    renderSchedulePage();
+    const verificationPending = words.some(
+      (item) => item.common === null && !item.warning,
+    );
     elements.loginCard.hidden = true;
     elements.schedule.hidden = false;
     elements.scheduleMessage.textContent = verificationPending
@@ -165,11 +310,7 @@ async function loadSchedule() {
     if (verificationPending) pollTimer = setTimeout(loadSchedule, 2000);
   } catch (error) {
     if (error.status === 401 || error.status === 503) {
-      sessionStorage.removeItem(TOKEN_KEY);
-      adminToken = "";
-      elements.loginCard.hidden = false;
-      elements.schedule.hidden = true;
-      elements.loginMessage.textContent = error.message;
+      showLoginError(error);
     } else {
       elements.scheduleMessage.textContent = error.message;
     }
@@ -196,7 +337,7 @@ async function rotateVerification() {
   elements.scheduleMessage.textContent = "Verificatie-rotatie gestart…";
   try {
     const result = await adminRequest(
-      adminApiUrl(`/daily-words/rotate-verification?days=${elements.daysSelect.value}`),
+      adminApiUrl("/daily-words/rotate-verification?days=30"),
       { method: "POST" },
     );
     await loadSchedule();
@@ -218,9 +359,38 @@ elements.tokenForm.addEventListener("submit", (event) => {
   sessionStorage.setItem(TOKEN_KEY, adminToken);
   elements.loginMessage.textContent = "";
   loadSchedule();
+  loadPerformance();
 });
 
-elements.daysSelect.addEventListener("change", loadSchedule);
+elements.schedulePageSize.addEventListener("change", () => {
+  scheduleState.pageSize = Number(elements.schedulePageSize.value);
+  scheduleState.page = 1;
+  renderSchedulePage();
+});
+elements.schedulePrevious.addEventListener("click", () => {
+  scheduleState.page -= 1;
+  renderSchedulePage();
+});
+elements.scheduleNext.addEventListener("click", () => {
+  scheduleState.page += 1;
+  renderSchedulePage();
+});
+elements.performancePageSize.addEventListener("change", () => {
+  performanceState.pageSize = Number(elements.performancePageSize.value);
+  performanceState.page = 1;
+  renderPerformancePage();
+});
+elements.performancePrevious.addEventListener("click", () => {
+  performanceState.page -= 1;
+  renderPerformancePage();
+});
+elements.performanceNext.addEventListener("click", () => {
+  performanceState.page += 1;
+  renderPerformancePage();
+});
 elements.rotateVerificationButton.addEventListener("click", rotateVerification);
 elements.backToGameLink.href = gameUrl();
-if (adminToken) loadSchedule();
+if (adminToken) {
+  loadSchedule();
+  loadPerformance();
+}

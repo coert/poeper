@@ -12,6 +12,8 @@ wheels/
 # Runtime schedule overrides
 data/backups/
 data/daily-words.json
+data/performance.sqlite3
+data/performance.sqlite3-*
 data/*.tmp
 .env.production
 000-default-le-ssl.conf
