@@ -55,7 +55,11 @@ def test_frontend_is_served() -> None:
     assert 'return "🟨"' in script.text
     assert 'return "⬜"' in script.text
     assert "navigator.clipboard.writeText" in script.text
-    assert "van par" in script.text
+    assert "window.location.href" in script.text
+    assert 'document.createElement("a")' in script.text
+    assert "elements.sharePreview.replaceChildren" in script.text
+    assert "van par" not in script.text
+    assert "Op par" not in script.text
 
 
 def test_game_date_uses_the_requested_time_zone() -> None:

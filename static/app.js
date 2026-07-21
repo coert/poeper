@@ -208,17 +208,27 @@ function createShareText(state) {
     previousWord = word;
     return squares;
   });
-  const distanceFromPar = state.attempts - state.minimum_attempts;
-  const parLine = distanceFromPar === 0
-    ? `Op par (${state.minimum_attempts})`
-    : `${distanceFromPar > 0 ? "+" : ""}${distanceFromPar} van par (${state.minimum_attempts})`;
   return [
     `POEPER 💩 ${state.date}`,
     "",
     ...rows,
     "",
-    parLine,
+    window.location.href,
   ].join("\n");
+}
+
+function renderSharePreview(state) {
+  const gameUrl = window.location.href;
+  const shareText = createShareText(state);
+  const link = document.createElement("a");
+  link.href = gameUrl;
+  link.textContent = gameUrl;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  elements.sharePreview.replaceChildren(
+    document.createTextNode(shareText.slice(0, -gameUrl.length)),
+    link,
+  );
 }
 
 function createWordRow(word, previousWord = "", targetWord = "") {
@@ -292,7 +302,7 @@ function renderState(state) {
     elements.resultCopy.textContent = extra === 0
       ? "De kortste route — perfect gespeeld."
       : `${extra} ${extra === 1 ? "zet" : "zetten"} boven de kortste route.`;
-    elements.sharePreview.textContent = createShareText(state);
+    renderSharePreview(state);
   } else {
     elements.input.value = "";
     elements.input.focus();
@@ -323,7 +333,7 @@ async function copyShareResult() {
 
 function openShareDialog() {
   if (!gameState?.completed) return;
-  elements.sharePreview.textContent = createShareText(gameState);
+  renderSharePreview(gameState);
   elements.copyStatus.textContent = "";
   elements.shareCopyButton.textContent = "Kopieer overzicht";
   elements.shareDialog.showModal();
